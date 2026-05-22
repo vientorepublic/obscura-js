@@ -8,7 +8,7 @@ import type { HazeOptions } from "../src/types";
 const program = new Command();
 
 program
-  .name("haze")
+  .name("haze-js")
   .description("JavaScript code protection tool — obfuscation & anti-debugging")
   .version("0.1.0");
 
