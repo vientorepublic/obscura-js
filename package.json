@@ -39,6 +39,14 @@
     "ast",
     "babel"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vientorepublic/obscura-js.git"
+  },
+  "homepage": "https://github.com/vientorepublic/obscura-js#readme",
+  "bugs": {
+    "url": "https://github.com/vientorepublic/obscura-js/issues"
+  },
   "author": "vientorepublic",
   "license": "MIT",
   "engines": {
