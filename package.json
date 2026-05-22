@@ -19,7 +19,7 @@
     "obscura-js": "dist/bin/haze.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/bin/haze.js",
     "build:watch": "tsc --watch",
     "prepublishOnly": "npm run build && npm test",
     "test": "jest --coverage",
