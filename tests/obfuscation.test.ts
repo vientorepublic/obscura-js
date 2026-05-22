@@ -244,8 +244,10 @@ describe("controlFlowFlattening", () => {
 describe("deadCode", () => {
   it("injects dead code statements using opaque predicates", () => {
     const code = parseAndApply("const x = 1;", (ast) => applyDeadCode(ast, { targetLines: 5 }));
-    // New templates use opaque predicates (bitwise / XOR) instead of trivial 0===1
-    expect(code).toMatch(/\(.*&\s*0\)\s*!==\s*0|\(\d+\s*\^\s*\d+\)\s*!==\s*0|_0x[0-9a-f]{8}/);
+    // All 7 templates produce either randHexId (_0x<8hex>) or randInternalId (_mask_xxx, _hash_xxx, etc.)
+    expect(code).toMatch(
+      /_0x[0-9a-f]{8}|_mask_|_hash_|_flag_|_val_|_acc_|_shift_|_buf_|_idx_|_key_|_state_|_tmp_|_crc_/
+    );
   });
 
   it("targetLines=0 injects nothing", () => {
