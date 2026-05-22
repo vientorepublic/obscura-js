@@ -62,7 +62,8 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
       if (
         t.isImportDeclaration(path.parent) ||
         t.isExportDeclaration(path.parent) ||
-        (t.isCallExpression(path.parent) && t.isIdentifier((path.parent as t.CallExpression).callee, { name: "require" }))
+        (t.isCallExpression(path.parent) &&
+          t.isIdentifier((path.parent as t.CallExpression).callee, { name: "require" }))
       ) {
         return;
       }
@@ -75,12 +76,21 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
 
   // Replace string literals with __haze_sp(start, len, seed) calls
   for (const { path, entry } of replacements) {
-    path.replaceWith(t.callExpression(t.identifier(POOL_FN), [t.numericLiteral(entry.start), t.numericLiteral(entry.len), t.numericLiteral(seed)]));
+    path.replaceWith(
+      t.callExpression(t.identifier(POOL_FN), [
+        t.numericLiteral(entry.start),
+        t.numericLiteral(entry.len),
+        t.numericLiteral(seed),
+      ])
+    );
   }
 
   // Prepend the pool array and decryption function
   const poolArray = t.variableDeclaration("const", [
-    t.variableDeclarator(t.identifier(POOL_VAR), t.arrayExpression(allCiphertext.map((b) => t.numericLiteral(b)))),
+    t.variableDeclarator(
+      t.identifier(POOL_VAR),
+      t.arrayExpression(allCiphertext.map((b) => t.numericLiteral(b)))
+    ),
   ]);
 
   // Decryption function:
@@ -102,7 +112,9 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
         t.variableDeclarator(t.identifier("out"), t.stringLiteral("")),
       ]),
       t.forStatement(
-        t.variableDeclaration("let", [t.variableDeclarator(t.identifier("i"), t.numericLiteral(0))]),
+        t.variableDeclaration("let", [
+          t.variableDeclarator(t.identifier("i"), t.numericLiteral(0)),
+        ]),
         t.binaryExpression("<", t.identifier("i"), t.identifier("len")),
         t.updateExpression("++", t.identifier("i")),
         t.blockStatement([
@@ -113,31 +125,50 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
                 "&",
                 t.binaryExpression(
                   "^",
-                  t.memberExpression(t.identifier(POOL_VAR), t.binaryExpression("+", t.identifier("start"), t.identifier("i")), true),
-                  t.identifier("key"),
+                  t.memberExpression(
+                    t.identifier(POOL_VAR),
+                    t.binaryExpression("+", t.identifier("start"), t.identifier("i")),
+                    true
+                  ),
+                  t.identifier("key")
                 ),
-                t.numericLiteral(0x7f),
-              ),
+                t.numericLiteral(0x7f)
+              )
             ),
           ]),
           t.expressionStatement(
             t.assignmentExpression(
               "+=",
               t.identifier("out"),
-              t.callExpression(t.memberExpression(t.identifier("String"), t.identifier("fromCodePoint")), [t.identifier("b")]),
-            ),
+              t.callExpression(
+                t.memberExpression(t.identifier("String"), t.identifier("fromCodePoint")),
+                [t.identifier("b")]
+              )
+            )
           ),
           t.expressionStatement(
             t.assignmentExpression(
               "=",
               t.identifier("key"),
-              t.binaryExpression("&", t.binaryExpression("+", t.identifier("key"), t.identifier("b")), t.numericLiteral(0x7f)),
-            ),
+              t.binaryExpression(
+                "&",
+                t.binaryExpression(
+                  "+",
+                  t.identifier("key"),
+                  t.memberExpression(
+                    t.identifier(POOL_VAR),
+                    t.binaryExpression("+", t.identifier("start"), t.identifier("i")),
+                    true
+                  )
+                ),
+                t.numericLiteral(0x7f)
+              )
+            )
           ),
-        ]),
+        ])
       ),
       t.returnStatement(t.identifier("out")),
-    ]),
+    ])
   );
 
   (ast.program.body as t.Statement[]).unshift(decryptFn, poolArray);

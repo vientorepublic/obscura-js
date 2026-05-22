@@ -23,6 +23,16 @@ export function applyMba(ast: t.File, options: MbaOptions = {}): void {
           // Skip non-numeric-context operators
           if (operator !== "+" && operator !== "-") return;
 
+          // Skip string concatenation — MBA identities only hold for integers
+          if (
+            operator === "+" &&
+            (t.isStringLiteral(left) ||
+              t.isStringLiteral(right) ||
+              t.isTemplateLiteral(left) ||
+              t.isTemplateLiteral(right))
+          )
+            return;
+
           // Prevent infinite expansion
           if (path.node.extra?.["mbaExpanded"]) return;
 
@@ -33,14 +43,26 @@ export function applyMba(ast: t.File, options: MbaOptions = {}): void {
             replacement = t.binaryExpression(
               "+",
               t.binaryExpression("^", t.cloneNode(left), t.cloneNode(right)),
-              t.binaryExpression("*", t.numericLiteral(2), t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))),
+              t.binaryExpression(
+                "*",
+                t.numericLiteral(2),
+                t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))
+              )
             );
           } else {
             // x - y  ≡  (x ^ y) - 2 * (~x & y)
             replacement = t.binaryExpression(
               "-",
               t.binaryExpression("^", t.cloneNode(left), t.cloneNode(right)),
-              t.binaryExpression("*", t.numericLiteral(2), t.binaryExpression("&", t.unaryExpression("~", t.cloneNode(left)), t.cloneNode(right))),
+              t.binaryExpression(
+                "*",
+                t.numericLiteral(2),
+                t.binaryExpression(
+                  "&",
+                  t.unaryExpression("~", t.cloneNode(left)),
+                  t.cloneNode(right)
+                )
+              )
             );
           }
 

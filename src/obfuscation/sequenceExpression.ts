@@ -14,7 +14,10 @@ import type { SequenceExpressionOptions } from "../types";
  * After:
  *   cond && ((a = 1), (b = 2));
  */
-export function applySequenceExpression(ast: t.File, options: SequenceExpressionOptions = {}): void {
+export function applySequenceExpression(
+  ast: t.File,
+  options: SequenceExpressionOptions = {}
+): void {
   const probability = options.probability ?? 1.0;
 
   traverse(ast, {
@@ -25,7 +28,8 @@ export function applySequenceExpression(ast: t.File, options: SequenceExpression
 
       // Only flatten simple BlockStatement bodies (no declarations)
       const canFlatten = (node: t.Statement): node is t.BlockStatement =>
-        t.isBlockStatement(node) && node.body.every((s): s is t.ExpressionStatement => t.isExpressionStatement(s));
+        t.isBlockStatement(node) &&
+        node.body.every((s): s is t.ExpressionStatement => t.isExpressionStatement(s));
 
       if (!canFlatten(consequent)) return;
       if (alternate !== null && alternate !== undefined && !canFlatten(alternate)) return;
@@ -41,7 +45,11 @@ export function applySequenceExpression(ast: t.File, options: SequenceExpression
         replacement = t.logicalExpression("&&", test, toSeq(consequent as t.BlockStatement));
       } else {
         // if (cond) { ... } else { ... }  →  cond ? (...) : (...)
-        replacement = t.conditionalExpression(test, toSeq(consequent as t.BlockStatement), toSeq(alternate as t.BlockStatement));
+        replacement = t.conditionalExpression(
+          test,
+          toSeq(consequent as t.BlockStatement),
+          toSeq(alternate as t.BlockStatement)
+        );
       }
 
       path.replaceWith(t.expressionStatement(replacement));

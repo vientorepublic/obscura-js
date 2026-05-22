@@ -7,15 +7,29 @@ const DEAD_TEMPLATES: (() => t.Statement)[] = [
     t.ifStatement(
       t.binaryExpression("===", t.numericLiteral(0), t.numericLiteral(1)),
       t.blockStatement([
-        t.expressionStatement(t.callExpression(t.memberExpression(t.identifier("console"), t.identifier("log")), [t.stringLiteral("unreachable")])),
-      ]),
+        t.expressionStatement(
+          t.callExpression(t.memberExpression(t.identifier("console"), t.identifier("log")), [
+            t.stringLiteral("unreachable"),
+          ])
+        ),
+      ])
     ),
-  () => t.whileStatement(t.booleanLiteral(false), t.blockStatement([t.expressionStatement(t.numericLiteral(Math.floor(Math.random() * 0xffff)))])),
+  () =>
+    t.whileStatement(
+      t.booleanLiteral(false),
+      t.blockStatement([
+        t.expressionStatement(t.numericLiteral(Math.floor(Math.random() * 0xffff))),
+      ])
+    ),
   () =>
     t.variableDeclaration("var", [
       t.variableDeclarator(
         t.identifier(`__dead_${Math.floor(Math.random() * 0xffff).toString(16)}`),
-        t.binaryExpression("&", t.numericLiteral(Math.floor(Math.random() * 0xff)), t.numericLiteral(0)),
+        t.binaryExpression(
+          "&",
+          t.numericLiteral(Math.floor(Math.random() * 0xff)),
+          t.numericLiteral(0)
+        )
       ),
     ]),
 ];

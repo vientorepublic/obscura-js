@@ -32,7 +32,12 @@ export function applyIntegrityTag(ast: t.File, options: IntegrityTagOptions = {}
       if (t.isCallExpression(path.parent)) return;
 
       const checksum = path.node.elements.length ^ 0xdeadbeef;
-      path.replaceWith(t.callExpression(t.identifier(tagFn), [t.cloneNode(path.node, true), t.numericLiteral(checksum >>> 0)]));
+      path.replaceWith(
+        t.callExpression(t.identifier(tagFn), [
+          t.cloneNode(path.node, true),
+          t.numericLiteral(checksum >>> 0),
+        ])
+      );
       hasArrays = true;
     },
   });
@@ -41,7 +46,10 @@ export function applyIntegrityTag(ast: t.File, options: IntegrityTagOptions = {}
 
   // const __haze_sym = Symbol('jas');
   const symDecl = t.variableDeclaration("const", [
-    t.variableDeclarator(t.identifier(symVar), t.callExpression(t.identifier("Symbol"), [t.stringLiteral(description)])),
+    t.variableDeclarator(
+      t.identifier(symVar),
+      t.callExpression(t.identifier("Symbol"), [t.stringLiteral(description)])
+    ),
   ]);
 
   // function __haze_tag(v, checksum) {
@@ -53,17 +61,20 @@ export function applyIntegrityTag(ast: t.File, options: IntegrityTagOptions = {}
     [t.identifier("v"), t.identifier("checksum")],
     t.blockStatement([
       t.expressionStatement(
-        t.callExpression(t.memberExpression(t.identifier("Object"), t.identifier("defineProperty")), [
-          t.identifier("v"),
-          t.identifier(symVar),
-          t.objectExpression([
-            t.objectProperty(t.identifier("value"), t.identifier("checksum")),
-            t.objectProperty(t.identifier("enumerable"), t.booleanLiteral(false)),
-          ]),
-        ]),
+        t.callExpression(
+          t.memberExpression(t.identifier("Object"), t.identifier("defineProperty")),
+          [
+            t.identifier("v"),
+            t.identifier(symVar),
+            t.objectExpression([
+              t.objectProperty(t.identifier("value"), t.identifier("checksum")),
+              t.objectProperty(t.identifier("enumerable"), t.booleanLiteral(false)),
+            ]),
+          ]
+        )
       ),
       t.returnStatement(t.identifier("v")),
-    ]),
+    ])
   );
 
   (ast.program.body as t.Statement[]).unshift(tagDecl, symDecl);

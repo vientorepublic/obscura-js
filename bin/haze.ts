@@ -7,7 +7,10 @@ import type { HazeOptions } from "../src/types";
 
 const program = new Command();
 
-program.name("haze").description("JavaScript code protection tool — obfuscation & anti-debugging").version("0.1.0");
+program
+  .name("haze")
+  .description("JavaScript code protection tool — obfuscation & anti-debugging")
+  .version("0.1.0");
 
 program
   .command("protect <input>")
@@ -22,6 +25,7 @@ program
   .option("--no-native", "Disable native method binding pass")
   .option("--no-tag", "Disable symbol integrity tag pass")
   .option("--sp-seed <number>", "Seed for the string pool XOR cipher", parseInt)
+  .option("--minify", "Minify output (compact whitespace, shorten literals)")
   .action((input: string, opts: Record<string, unknown>) => {
     const inputPath = resolve(process.cwd(), input);
     const source = readFileSync(inputPath, "utf-8");
@@ -39,11 +43,14 @@ program
         nativeBinding: opts["native"] === false ? false : {},
         integrityTag: opts["tag"] === false ? false : {},
       },
+      minify: opts["minify"] === true,
     };
 
     const { code, appliedPasses } = protect(source, options);
 
-    const outputPath = opts["output"] ? resolve(process.cwd(), opts["output"] as string) : inputPath.replace(/\.js$/, "") + ".haze.js";
+    const outputPath = opts["output"]
+      ? resolve(process.cwd(), opts["output"] as string)
+      : inputPath.replace(/\.js$/, "") + ".haze.js";
 
     writeFileSync(outputPath, code, "utf-8");
     console.log(`✔ Protected: ${outputPath}`);

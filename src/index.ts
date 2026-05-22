@@ -40,7 +40,10 @@ export function protect(source: string, options: HazeOptions = {}): ProtectResul
   applyObfuscation(ast, options.obfuscation, appliedPasses);
   applyAntiDebug(ast, options.antiDebug, appliedPasses);
 
-  const { code } = generate(ast);
+  const { code } = generate(ast, {
+    minified: options.minify ?? false,
+    compact: options.minify ?? false,
+  });
 
   return { code, appliedPasses };
 }

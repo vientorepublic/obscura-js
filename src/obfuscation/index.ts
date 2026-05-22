@@ -7,13 +7,24 @@ import { applyStringPool } from "./stringPool";
 import { applyControlFlowFlattening } from "./cff";
 import { applyDeadCode } from "./deadCode";
 
-export { applySequenceExpression, applyMba, applyFunctionTable, applyStringPool, applyControlFlowFlattening, applyDeadCode };
+export {
+  applySequenceExpression,
+  applyMba,
+  applyFunctionTable,
+  applyStringPool,
+  applyControlFlowFlattening,
+  applyDeadCode,
+};
 
 /**
  * Run all enabled obfuscation passes in order.
  * Each pass is opt-in: pass `false` to skip it entirely.
  */
-export function applyObfuscation(ast: t.File, options: ObfuscationOptions = {}, appliedPasses: string[]): void {
+export function applyObfuscation(
+  ast: t.File,
+  options: ObfuscationOptions = {},
+  appliedPasses: string[]
+): void {
   if (options.sequenceExpression !== false) {
     applySequenceExpression(ast, options.sequenceExpression ?? {});
     appliedPasses.push("sequenceExpression");

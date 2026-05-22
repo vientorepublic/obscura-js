@@ -34,7 +34,10 @@ export function applyNativeBinding(ast: t.File, options: NativeBindingOptions = 
     const constName = `__haze_${parts.join("_")}`;
 
     // Build member expression: Math.floor
-    const memberExpr = parts.reduce<t.Expression>((acc, part) => t.memberExpression(acc, t.identifier(part)), t.identifier(parts[0]));
+    const memberExpr = parts.reduce<t.Expression>(
+      (acc, part) => t.memberExpression(acc, t.identifier(part)),
+      t.identifier(parts[0])
+    );
     // Actually rebuild correctly:
     let obj: t.Expression = t.identifier(parts[0]);
     for (let i = 1; i < parts.length; i++) {
@@ -53,7 +56,9 @@ export function applyNativeBinding(ast: t.File, options: NativeBindingOptions = 
     // <method>.bind(<receiver>)
     const bindCall = t.callExpression(t.memberExpression(obj, t.identifier("bind")), [receiver]);
 
-    return t.variableDeclaration("const", [t.variableDeclarator(t.identifier(constName), bindCall)]);
+    return t.variableDeclaration("const", [
+      t.variableDeclarator(t.identifier(constName), bindCall),
+    ]);
   });
 
   (ast.program.body as t.Statement[]).unshift(...declarations);

@@ -9,7 +9,11 @@ export { applyIntegrityTag, applyNativeBinding };
  * Run all enabled anti-debugging/tampering passes in order.
  * Each pass is opt-in: pass `false` to skip it.
  */
-export function applyAntiDebug(ast: t.File, options: AntiDebugOptions = {}, appliedPasses: string[]): void {
+export function applyAntiDebug(
+  ast: t.File,
+  options: AntiDebugOptions = {},
+  appliedPasses: string[]
+): void {
   if (options.nativeBinding !== false) {
     applyNativeBinding(ast, options.nativeBinding ?? {});
     appliedPasses.push("nativeBinding");

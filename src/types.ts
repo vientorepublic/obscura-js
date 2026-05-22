@@ -73,6 +73,8 @@ export interface AntiDebugOptions {
 export interface HazeOptions {
   obfuscation?: ObfuscationOptions;
   antiDebug?: AntiDebugOptions;
+  /** Minify the output (removes whitespace and shortens literals). Default: false */
+  minify?: boolean;
 }
 
 // ─── Protect result ──────────────────────────────────────────────────────────

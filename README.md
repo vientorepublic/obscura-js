@@ -39,6 +39,7 @@ const { code, appliedPasses } = protect(source, {
     nativeBinding: { methods: ["Math.floor", "Object.defineProperty"] },
     integrityTag: { tagDescription: "jas" },
   },
+  minify: true,
 });
 ```
 
@@ -56,7 +57,24 @@ protect(source, {
 npx haze protect input.js -o output.js
 npx haze protect input.js --no-dead --no-cff
 npx haze protect input.js --sp-seed 9999
+npx haze protect input.js --minify
 ```
+
+### CLI 옵션 전체 목록
+
+| 옵션                  | 설명                                    |
+| --------------------- | --------------------------------------- |
+| `-o, --output <file>` | 출력 파일 경로                          |
+| `--no-seq`            | sequenceExpression 패스 비활성화        |
+| `--no-mba`            | MBA 패스 비활성화                       |
+| `--no-ft`             | functionTable 패스 비활성화             |
+| `--no-sp`             | stringPool 패스 비활성화                |
+| `--no-cff`            | controlFlowFlattening 패스 비활성화     |
+| `--no-dead`           | deadCode 패스 비활성화                  |
+| `--no-native`         | nativeBinding 패스 비활성화             |
+| `--no-tag`            | integrityTag 패스 비활성화              |
+| `--sp-seed <number>`  | stringPool XOR 시드 값 지정             |
+| `--minify`            | 출력 코드 압축 (공백 제거, 리터럴 단축) |
 
 ## 레퍼런스
 
