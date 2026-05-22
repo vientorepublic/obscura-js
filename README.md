@@ -55,13 +55,13 @@ console.log(appliedPasses);
 
 ```bash
 # Protect a file (output: app.haze.js)
-npx haze-js protect app.js
+npx haze-cli protect app.js
 
 # Specify output path
-npx haze-js protect app.js -o app.protected.js
+npx haze-cli protect app.js -o app.protected.js
 
 # Minify output
-npx haze-js protect app.js --minify
+npx haze-cli protect app.js --minify
 ```
 
 ## API Reference
@@ -130,7 +130,7 @@ protect(source, {
 ## CLI Reference
 
 ```bash
-npx haze-js protect <input> [options]
+haze-cli protect <input> [options]
 ```
 
 | Option                | Description                                          |

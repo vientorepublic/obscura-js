@@ -16,7 +16,7 @@
   ],
   "sideEffects": false,
   "bin": {
-    "haze": "dist/bin/haze.js"
+    "haze-cli": "dist/bin/haze.js"
   },
   "scripts": {
     "build": "tsc",
