@@ -8,14 +8,14 @@ import type { HazeOptions } from "../src/types";
 const program = new Command();
 
 program
-  .name("haze-cli")
+  .name("obscura-js")
   .description("JavaScript code protection tool — obfuscation & anti-debugging")
   .version("0.1.0");
 
 program
   .command("protect <input>")
   .description("Protect a JavaScript file")
-  .option("-o, --output <file>", "Output file (default: <input>.haze.js)")
+  .option("-o, --output <file>", "Output file (default: <input>.obscura.js)")
   .option("--no-seq", "Disable sequence expression pass")
   .option("--no-mba", "Disable mixed boolean arithmetic pass")
   .option("--no-ft", "Disable indirect function table pass")
@@ -50,7 +50,7 @@ program
 
     const outputPath = opts["output"]
       ? resolve(process.cwd(), opts["output"] as string)
-      : inputPath.replace(/\.js$/, "") + ".haze.js";
+      : inputPath.replace(/\.js$/, "") + ".obscura.js";
 
     writeFileSync(outputPath, code, "utf-8");
     console.log(`✔ Protected: ${outputPath}`);

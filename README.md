@@ -1,10 +1,10 @@
-# haze-js
+# obscura-js
 
 A JavaScript code protection library inspired by the obfuscation and anti-debugging techniques used in Google reCAPTCHA.
 
-[![npm version](https://img.shields.io/npm/v/haze-js)](https://www.npmjs.com/package/haze-js)
-[![license](https://img.shields.io/npm/l/haze-js)](LICENSE)
-[![node](https://img.shields.io/node/v/haze-js)](package.json)
+[![npm version](https://img.shields.io/npm/v/obscura-js)](https://www.npmjs.com/package/obscura-js)
+[![license](https://img.shields.io/npm/l/obscura-js)](LICENSE)
+[![node](https://img.shields.io/node/v/obscura-js)](package.json)
 
 ## Features
 
@@ -30,7 +30,7 @@ npm test
 ## Installation
 
 ```bash
-npm install haze-js
+npm install obscura-js
 ```
 
 ## Quick Start
@@ -38,7 +38,7 @@ npm install haze-js
 ### API
 
 ```typescript
-import { protect } from "haze-js";
+import { protect } from "obscura-js";
 import { readFileSync } from "fs";
 
 const source = readFileSync("app.js", "utf-8");
@@ -54,14 +54,14 @@ console.log(appliedPasses);
 ### CLI
 
 ```bash
-# Protect a file (output: app.haze.js)
-npx haze-cli protect app.js
+# Protect a file (output: app.obscura.js)
+npx obscura-js protect app.js
 
 # Specify output path
-npx haze-cli protect app.js -o app.protected.js
+npx obscura-js protect app.js -o app.protected.js
 
 # Minify output
-npx haze-cli protect app.js --minify
+npx obscura-js protect app.js --minify
 ```
 
 ## API Reference
@@ -130,12 +130,12 @@ protect(source, {
 ## CLI Reference
 
 ```bash
-haze-cli protect <input> [options]
+obscura-js protect <input> [options]
 ```
 
 | Option                | Description                                          |
 | --------------------- | ---------------------------------------------------- |
-| `-o, --output <file>` | Output file path (default: `<input>.haze.js`)        |
+| `-o, --output <file>` | Output file path (default: `<input>.obscura.js`)     |
 | `--no-seq`            | Disable `sequenceExpression` pass                    |
 | `--no-mba`            | Disable `mba` pass                                   |
 | `--no-ft`             | Disable `functionTable` pass                         |
