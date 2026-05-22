@@ -1,0 +1,53 @@
+{
+  "name": "haze-js",
+  "version": "0.1.0",
+  "description": "JavaScript code protection tool based on obfuscation and anti-debugging techniques",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "haze": "dist/bin/haze.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "jest --coverage",
+    "lint": "eslint src/ bin/",
+    "lint:fix": "eslint src/ bin/ --fix",
+    "dev": "ts-node bin/haze.ts"
+  },
+  "keywords": [
+    "obfuscation",
+    "javascript",
+    "security",
+    "anti-debug",
+    "anti-tamper",
+    "code-protection"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/generator": "^7.24.0",
+    "@babel/parser": "^7.24.0",
+    "@babel/traverse": "^7.24.0",
+    "@babel/types": "^7.24.0",
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/babel__core": "^7.20.5",
+    "@types/babel__generator": "^7.6.8",
+    "@types/babel__traverse": "^7.20.6",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.12.0",
+    "@typescript-eslint/eslint-plugin": "^7.7.0",
+    "@typescript-eslint/parser": "^7.7.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
