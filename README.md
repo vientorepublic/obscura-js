@@ -19,7 +19,7 @@ A JavaScript code protection library inspired by the obfuscation and anti-debugg
 | Anti-debug  | `nativeBinding`         | Pre-bind native methods to defend against prototype pollution       |
 | Anti-debug  | `integrityTag`          | Attach Symbol-based integrity tags to detect object cloning/replace |
 
-## 시작하기
+## Getting Started
 
 ```bash
 npm install
