@@ -1,15 +1,27 @@
 {
   "name": "haze-js",
   "version": "0.1.0",
-  "description": "JavaScript code protection tool based on obfuscation and anti-debugging techniques",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "description": "JavaScript code protection tool — obfuscation & anti-debugging inspired by Google reCAPTCHA",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "sideEffects": false,
   "bin": {
     "haze": "dist/bin/haze.js"
   },
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
+    "prepublishOnly": "npm run build && npm test",
     "test": "jest --coverage",
     "lint": "eslint src/ bin/",
     "lint:fix": "eslint src/ bin/ --fix",
@@ -23,7 +35,9 @@
     "security",
     "anti-debug",
     "anti-tamper",
-    "code-protection"
+    "code-protection",
+    "ast",
+    "babel"
   ],
   "author": "",
   "license": "MIT",

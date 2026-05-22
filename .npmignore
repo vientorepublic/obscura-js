@@ -1,0 +1,28 @@
+# Source files (only dist/ is needed)
+src/
+bin/
+tests/
+
+# Documentation & examples
+docs/
+example/
+
+# Build configuration
+tsconfig.json
+jest.config.js
+.eslintrc.json
+.prettierrc
+.prettierignore
+
+# VCS
+.gitignore
+.git/
+
+# Test & coverage output
+coverage/
+*.lcov
+
+# Misc
+*.log
+*.tgz
+.nyc_output/
