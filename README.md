@@ -23,8 +23,8 @@ A JavaScript code protection library inspired by the obfuscation and anti-debugg
 
 ```bash
 npm install
-npm run build   # dist/ 로 컴파일
-npm test        # 테스트 실행
+npm run build
+npm test
 ```
 
 ## Installation
