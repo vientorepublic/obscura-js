@@ -14,10 +14,10 @@ function parseAndApply(source: string, fn: (ast: ParseResult) => void): string {
 // ─── integrityTag ─────────────────────────────────────────────────────────────
 
 describe("integrityTag", () => {
-  it("wraps array literals with __haze_tag", () => {
+  it("wraps array literals with __obscura_tag", () => {
     const code = parseAndApply("const a = [1, 2, 3];", (ast) => applyIntegrityTag(ast));
-    expect(code).toContain("__haze_tag");
-    expect(code).toContain("__haze_sym");
+    expect(code).toContain("__obscura_tag");
+    expect(code).toContain("__obscura_sym");
   });
 
   it("injects Symbol declaration and helper function", () => {
@@ -35,23 +35,23 @@ describe("integrityTag", () => {
     expect(code).not.toContain('"jas"');
   });
 
-  it("wraps an empty array with checksum 0 ^ 0xdeadbeef", () => {
+  it("wraps an empty array with a numeric checksum", () => {
     const code = parseAndApply("const a = [];", (ast) => applyIntegrityTag(ast));
-    // 0 elements ^ 0xdeadbeef = 3735928559
-    expect(code).toContain("3735928559");
+    // Checksum is a randomized mix — just verify a number argument is present
+    expect(code).toMatch(/__obscura_tag\(\[\],\s*\d+\)/);
   });
 
   it("tags multiple arrays in the same source independently", () => {
     const code = parseAndApply("const a = [1]; const b = [2, 3];", (ast) => applyIntegrityTag(ast));
-    // At least one __haze_tag call per user array; the injected helper may add more
-    const tagCalls = [...code.matchAll(/__haze_tag\(/g)];
+    // At least one __obscura_tag call per user array; the injected helper may add more
+    const tagCalls = [...code.matchAll(/__obscura_tag\(/g)];
     expect(tagCalls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("does not inject helpers when there are no array literals", () => {
     const code = parseAndApply("const x = 1;", (ast) => applyIntegrityTag(ast));
-    expect(code).not.toContain("__haze_tag");
-    expect(code).not.toContain("__haze_sym");
+    expect(code).not.toContain("__obscura_tag");
+    expect(code).not.toContain("__obscura_sym");
   });
 
   it("output remains parseable after transformation", () => {
@@ -82,22 +82,22 @@ describe("nativeBinding", () => {
     const code = parseAndApply("const x = 1;", (ast) =>
       applyNativeBinding(ast, { methods: ["Math.floor"] })
     );
-    expect(code).toContain("__haze_Math_floor");
+    expect(code).toContain("__obscura_Math_floor");
     expect(code).toContain("Math.floor.bind(Math)");
   });
 
   it("prepends all default methods when no options are given", () => {
     const code = parseAndApply("const x = 1;", (ast) => applyNativeBinding(ast));
-    expect(code).toContain("__haze_Math_floor");
-    expect(code).toContain("__haze_Math_random");
-    expect(code).toContain("__haze_Object_defineProperty");
+    expect(code).toContain("__obscura_Math_floor");
+    expect(code).toContain("__obscura_Math_random");
+    expect(code).toContain("__obscura_Object_defineProperty");
   });
 
   it("handles multi-segment paths like Array.prototype.slice", () => {
     const code = parseAndApply("const x = 1;", (ast) =>
       applyNativeBinding(ast, { methods: ["Array.prototype.slice"] })
     );
-    expect(code).toContain("__haze_Array_prototype_slice");
+    expect(code).toContain("__obscura_Array_prototype_slice");
     expect(code).toContain("Array.prototype.slice.bind(Array.prototype)");
   });
 
@@ -112,7 +112,7 @@ describe("nativeBinding", () => {
     const code = parseAndApply("const x = 1;", (ast) =>
       applyNativeBinding(ast, { methods: ["Math.ceil"] })
     );
-    expect(code).toMatch(/const __haze_Math_ceil/);
+    expect(code).toMatch(/const __obscura_Math_ceil/);
   });
 
   it("output remains parseable after transformation", () => {

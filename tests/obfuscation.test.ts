@@ -115,40 +115,40 @@ describe("functionTable", () => {
     sub(3, 1);
   `;
 
-  it("builds __haze_ft array from function declarations", () => {
+  it("builds __obscura_ft array from function declarations", () => {
     const code = parseAndApply(twoFnSource, (ast) => applyFunctionTable(ast));
-    expect(code).toContain("__haze_ft");
+    expect(code).toContain("__obscura_ft");
     expect(code).not.toMatch(/^function add/m);
     expect(code).not.toMatch(/^function sub/m);
   });
 
   it("replaces call sites with indexed lookups", () => {
     const code = parseAndApply(twoFnSource, (ast) => applyFunctionTable(ast));
-    expect(code).toMatch(/__haze_ft\[0\]/);
-    expect(code).toMatch(/__haze_ft\[1\]/);
+    expect(code).toMatch(/__obscura_ft\[0\]/);
+    expect(code).toMatch(/__obscura_ft\[1\]/);
   });
 
   it("skips transformation when function count is below minFunctions", () => {
     const source = "function only() {} only();";
     const code = parseAndApply(source, (ast) => applyFunctionTable(ast, { minFunctions: 2 }));
-    expect(code).not.toContain("__haze_ft");
+    expect(code).not.toContain("__obscura_ft");
     expect(code).toContain("function only");
   });
 
   it("applies when minFunctions=1 and one function exists", () => {
     const source = "function solo(x) { return x; } solo(42);";
     const code = parseAndApply(source, (ast) => applyFunctionTable(ast, { minFunctions: 1 }));
-    expect(code).toContain("__haze_ft");
-    expect(code).toMatch(/__haze_ft\[0\]/);
+    expect(code).toContain("__obscura_ft");
+    expect(code).toMatch(/__obscura_ft\[0\]/);
   });
 });
 
 // ─── stringPool ──────────────────────────────────────────────────────────────
 
 describe("stringPool", () => {
-  it("replaces string literals with __haze_sp calls", () => {
+  it("replaces string literals with __obscura_sp calls", () => {
     const code = parseAndApply('const s = "hello";', (ast) => applyStringPool(ast, { seed: 42 }));
-    expect(code).toContain("__haze_sp");
+    expect(code).toContain("__obscura_sp");
     expect(code).not.toContain('"hello"');
   });
 
@@ -157,7 +157,7 @@ describe("stringPool", () => {
       applyStringPool(ast, { seed: 10 })
     );
     // Both calls should reference the same start offset (0)
-    const matches = [...code.matchAll(/__haze_sp\((\d+),/g)];
+    const matches = [...code.matchAll(/__obscura_sp\((\d+),/g)];
     expect(matches).toHaveLength(2);
     expect(matches[0][1]).toBe(matches[1][1]); // same start offset
   });
@@ -167,7 +167,7 @@ describe("stringPool", () => {
     applyStringPool(ast, { seed: 42 });
     const code = generate(ast).code;
     expect(code).toContain('"some-module"');
-    expect(code).not.toContain("__haze_sp");
+    expect(code).not.toContain("__obscura_sp");
   });
 
   it("does not encrypt require() argument strings", () => {
@@ -175,13 +175,13 @@ describe("stringPool", () => {
       applyStringPool(ast, { seed: 42 })
     );
     expect(code).toContain('"fs"');
-    expect(code).not.toContain("__haze_sp");
+    expect(code).not.toContain("__obscura_sp");
   });
 
   it("no-op when there are no string literals", () => {
     const code = parseAndApply("const x = 1 + 2;", (ast) => applyStringPool(ast, { seed: 42 }));
-    expect(code).not.toContain("__haze_sp");
-    expect(code).not.toContain("__haze_pool");
+    expect(code).not.toContain("__obscura_sp");
+    expect(code).not.toContain("__obscura_pool");
   });
 
   it("pool decryption produces the original string at runtime", () => {
@@ -205,7 +205,7 @@ describe("controlFlowFlattening", () => {
     );
     expect(code).toContain("switch");
     expect(code).toContain("while");
-    expect(code).toContain("__haze_s");
+    expect(code).toContain("__obscura_s");
   });
 
   it("generates one case per original statement", () => {
@@ -242,9 +242,10 @@ describe("controlFlowFlattening", () => {
 // ─── deadCode ────────────────────────────────────────────────────────────────
 
 describe("deadCode", () => {
-  it("injects unreachable if(0===1) statements", () => {
+  it("injects dead code statements using opaque predicates", () => {
     const code = parseAndApply("const x = 1;", (ast) => applyDeadCode(ast, { targetLines: 5 }));
-    expect(code).toContain("0 === 1");
+    // New templates use opaque predicates (bitwise / XOR) instead of trivial 0===1
+    expect(code).toMatch(/\(.*&\s*0\)\s*!==\s*0|\(\d+\s*\^\s*\d+\)\s*!==\s*0|_0x[0-9a-f]{8}/);
   });
 
   it("targetLines=0 injects nothing", () => {

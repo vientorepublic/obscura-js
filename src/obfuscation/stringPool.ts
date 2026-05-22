@@ -2,8 +2,8 @@ import traverse, { type NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import type { StringPoolOptions } from "../types";
 
-const POOL_FN = "__haze_sp";
-const POOL_VAR = "__haze_pool";
+const POOL_FN = "__obscura_sp";
+const POOL_VAR = "__obscura_pool";
 
 /**
  * XOR-based LCG string encryption matching reCAPTCHA's encrypted string pool.
@@ -29,10 +29,11 @@ function encryptString(str: string, seed: number): { ciphertext: number[]; seed:
  * used in Google reCAPTCHA's string obfuscation.
  *
  * Before:  "hello"
- * After:   __haze_sp(0, 4, <seed>)
+ * After:   __obscura_sp(0, 4, <seed>)
  */
 export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): void {
-  const seed = options.seed ?? 42;
+  // Randomize seed per invocation when not explicitly provided (avoids fixed-seed fingerprint)
+  const seed = options.seed ?? Math.floor(Math.random() * 0x7fffff) + 1;
 
   const entries: { start: number; len: number; seed: number }[] = [];
   const allCiphertext: number[] = [];
@@ -74,7 +75,7 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
 
   if (entries.length === 0) return;
 
-  // Replace string literals with __haze_sp(start, len, seed) calls
+  // Replace string literals with __obscura_sp(start, len, seed) calls
   for (const { path, entry } of replacements) {
     path.replaceWith(
       t.callExpression(t.identifier(POOL_FN), [
@@ -94,10 +95,10 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
   ]);
 
   // Decryption function:
-  // function __haze_sp(start, len, seed) {
+  // function __obscura_sp(start, len, seed) {
   //   let key = seed, out = '';
   //   for (let i = 0; i < len; i++) {
-  //     const b = (__haze_pool[start + i] ^ key) & 0x7f;
+  //     const b = (__obscura_pool[start + i] ^ key) & 0x7f;
   //     out += String.fromCodePoint(b);
   //     key = (key + b) & 0x7f;
   //   }

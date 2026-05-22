@@ -21,8 +21,8 @@ const DEFAULT_METHODS = [
  * cannot affect these captured references.
  *
  * Example output:
- *   const __haze_Math_floor = Math.floor.bind(Math);
- *   const __haze_Math_random = Math.random.bind(Math);
+ *   const __obscura_Math_floor = Math.floor.bind(Math);
+ *   const __obscura_Math_random = Math.random.bind(Math);
  */
 export function applyNativeBinding(ast: t.File, options: NativeBindingOptions = {}): void {
   const methods = options.methods ?? DEFAULT_METHODS;
@@ -31,7 +31,7 @@ export function applyNativeBinding(ast: t.File, options: NativeBindingOptions = 
     const parts = methodPath.split(".");
     // receiver is the object before the last segment (e.g. Math for Math.floor)
     const receiverPath = parts.slice(0, -1).join(".");
-    const constName = `__haze_${parts.join("_")}`;
+    const constName = `__obscura_${parts.join("_")}`;
 
     // Build member expression: Math.floor
     const memberExpr = parts.reduce<t.Expression>(

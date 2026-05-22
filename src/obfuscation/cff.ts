@@ -29,7 +29,7 @@ export function applyControlFlowFlattening(
   options: ControlFlowFlatteningOptions = {}
 ): void {
   const passes = options.passes ?? 1;
-  const stateVar = "__haze_s";
+  const stateVar = "__obscura_s";
 
   /**
    * If `stmt` is a let/const VariableDeclaration, extract the declarators into
@@ -73,9 +73,17 @@ export function applyControlFlowFlattening(
 
         const hoisted: t.VariableDeclarator[] = [];
 
-        const cases = body.map((stmt, idx) => {
-          const nextState =
-            idx === body.length - 1 ? t.numericLiteral(-1) : t.numericLiteral(idx + 1);
+        // Fisher-Yates shuffle to assign random case numbers (not sequential)
+        const stateNums = Array.from({ length: body.length }, (_, i) => i);
+        for (let i = stateNums.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [stateNums[i], stateNums[j]] = [stateNums[j], stateNums[i]];
+        }
+
+        const cases = body.map((stmt, stepIdx) => {
+          const actualState = stateNums[stepIdx];
+          const nextActual = stepIdx === body.length - 1 ? -1 : stateNums[stepIdx + 1];
+          const nextState = t.numericLiteral(nextActual);
           const converted = extractHoisted(stmt, hoisted);
 
           const caseBody: t.Statement[] = [];
@@ -84,7 +92,7 @@ export function applyControlFlowFlattening(
             t.expressionStatement(t.assignmentExpression("=", t.identifier(stateVar), nextState)),
             t.breakStatement()
           );
-          return t.switchCase(t.numericLiteral(idx), caseBody);
+          return t.switchCase(t.numericLiteral(actualState), caseBody);
         });
 
         // default: return;
@@ -97,7 +105,7 @@ export function applyControlFlowFlattening(
 
         const prelude: t.Statement[] = [
           t.variableDeclaration("let", [
-            t.variableDeclarator(t.identifier(stateVar), t.numericLiteral(0)),
+            t.variableDeclarator(t.identifier(stateVar), t.numericLiteral(stateNums[0])),
           ]),
         ];
         if (hoisted.length > 0) {

@@ -8,7 +8,11 @@ import type { MbaOptions } from "../types";
  * Replaces simple numeric literals and binary expressions with equivalent
  * MBA expressions, making static analysis significantly harder.
  *
- * Example: `x + y`  →  `(x ^ y) + 2 * (x & y)`
+ * Identities applied:
+ *   x + y  →  (x ^ y) + 2*(x & y)
+ *   x - y  →  (x ^ y) - 2*(~x & y)
+ *   x | y  →  (x ^ y) + (x & y)        [bit-disjoint: no carry]
+ *   x ^ y  →  (x | y) - (x & y)
  */
 export function applyMba(ast: t.File, options: MbaOptions = {}): void {
   const rounds = options.rounds ?? 1;
@@ -20,8 +24,7 @@ export function applyMba(ast: t.File, options: MbaOptions = {}): void {
           const { operator, left, right } = path.node;
 
           if (!t.isExpression(left) || !t.isExpression(right)) return;
-          // Skip non-numeric-context operators
-          if (operator !== "+" && operator !== "-") return;
+          if (operator !== "+" && operator !== "-" && operator !== "|" && operator !== "^") return;
 
           // Skip string concatenation — MBA identities only hold for integers
           if (
@@ -49,7 +52,7 @@ export function applyMba(ast: t.File, options: MbaOptions = {}): void {
                 t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))
               )
             );
-          } else {
+          } else if (operator === "-") {
             // x - y  ≡  (x ^ y) - 2 * (~x & y)
             replacement = t.binaryExpression(
               "-",
@@ -63,6 +66,20 @@ export function applyMba(ast: t.File, options: MbaOptions = {}): void {
                   t.cloneNode(right)
                 )
               )
+            );
+          } else if (operator === "|") {
+            // x | y  ≡  (x ^ y) + (x & y)
+            replacement = t.binaryExpression(
+              "+",
+              t.binaryExpression("^", t.cloneNode(left), t.cloneNode(right)),
+              t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))
+            );
+          } else {
+            // x ^ y  ≡  (x | y) - (x & y)
+            replacement = t.binaryExpression(
+              "-",
+              t.binaryExpression("|", t.cloneNode(left), t.cloneNode(right)),
+              t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))
             );
           }
 
