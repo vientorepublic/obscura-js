@@ -1,58 +1,58 @@
-# Google reCAPTCHA 역공학 분석 레퍼런스
+# Google reCAPTCHA Reverse Engineering Analysis Reference
 
-> **출처**: [elyelysiox/recaptcha](https://github.com/elyelysiox/recaptcha)  
-> **목적**: 교육 및 연구 목적의 기술 분석  
-> **분석 대상**: Google reCAPTCHA (Antibot 시스템)의 난독화·디버깅/템퍼링 방지 기법
-
----
-
-## 목차
-
-1. [난독화 기법 (Obfuscation Techniques)](#1-난독화-기법)
-2. [디버깅 및 템퍼링 방지 기법 (Anti-debugging / Tampering)](#2-디버깅-및-템퍼링-방지-기법)
-3. [BotGuard 내부 구조](#3-botguard-내부-구조)
-4. [핑거프린트 타이밍 기반 감지](#4-핑거프린트-타이밍-기반-감지)
-5. [종합 요약](#5-종합-요약)
+> **Source**: [elyelysiox/recaptcha](https://github.com/elyelysiox/recaptcha)  
+> **Purpose**: Technical analysis for educational and research purposes  
+> **Subject**: Obfuscation and anti-debugging/tampering techniques used in Google reCAPTCHA (Antibot system)
 
 ---
 
-## 1. 난독화 기법
+## Table of Contents
 
-reCAPTCHA는 업계에서 가장 정교한 수준의 난독화를 적용하고 있으며, 코드 가독성을 낮추고 역공학을 어렵게 만드는 다양한 변환 기법을 복합적으로 사용한다. 대부분의 난독화는 AST(Abstract Syntax Tree)로 처리할 수 있지만, 일부는 런타임에 처리되어 정적 AST 분석이 불가능하다. 또한 **다형성(Polymorphism)** 을 적용하여 스크립트 버전마다 코드 구조가 달라진다.
+1. [Obfuscation Techniques](#1-obfuscation-techniques)
+2. [Anti-debugging / Anti-tampering Techniques](#2-anti-debugging--anti-tampering-techniques)
+3. [BotGuard Internal Structure](#3-botguard-internal-structure)
+4. [Fingerprint Timing-based Detection](#4-fingerprint-timing-based-detection)
+5. [Summary](#5-summary)
 
 ---
 
-### 1.1 시퀀스 표현식 (Sequence Expressions)
+## 1. Obfuscation Techniques
 
-블록 구문을 쉼표로 구분된 연속 표현식으로 평탄화(flatten)한다. `if` 문, 함수 인자, 객체 내부 등 어디서나 나타날 수 있다.
+reCAPTCHA applies some of the most sophisticated obfuscation in the industry, using a combination of transformation techniques to reduce code readability and hinder reverse engineering. Most obfuscation can be processed via AST (Abstract Syntax Tree), but some is handled at runtime, making static AST analysis impossible. **Polymorphism** is also applied so that the code structure differs between script versions.
+
+---
+
+### 1.1 Sequence Expressions
+
+Block statements are flattened into comma-separated sequential expressions. They can appear anywhere — inside `if` statements, function arguments, object literals, etc.
 
 ```js
-// 원래 블록 구조
+// Original block structure
 if (cond) {
   a = 1;
   b = 2;
 }
 
-// 시퀀스 표현식으로 변환
+// Transformed into sequence expressions
 cond && ((a = 1), (b = 2));
 ```
 
 ---
 
-### 1.2 혼합 불리언 산술 (Mixed Boolean Arithmetic, MBA)
+### 1.2 Mixed Boolean Arithmetic (MBA)
 
-산술 연산(덧셈, 뺄셈, 곱셈)과 비트 연산(AND, OR, XOR, NOT)을 섞어 원래 논리를 숨긴다.
+Arithmetic operations (addition, subtraction, multiplication) are mixed with bitwise operations (AND, OR, XOR, NOT) to hide the original logic.
 
 ```js
-// 예시: 단순한 값을 숨기기 위해 복잡한 표현식 사용
+// Example: using complex expressions to conceal simple values
 -2 * ~(h & H) + -2 + (h ^ H);
 ```
 
 ---
 
-### 1.3 간접 함수 테이블 (Indirect Function Table)
+### 1.3 Indirect Function Table
 
-모든 함수를 테이블(배열)에 등록하고, 인덱스를 통해 호출한다. 정적 분석으로 어떤 함수가 호출되는지 파악하기 어렵다.
+All functions are registered in a table (array) and invoked via index. This makes it difficult to determine which function is being called through static analysis.
 
 ```js
 functions[index](args);
@@ -60,13 +60,13 @@ functions[index](args);
 
 ---
 
-### 1.4 인라인 상수 배열 (Inline Constant Array)
+### 1.4 Inline Constant Array
 
-함수 본문에서 반복 사용하는 숫자·문자열 상수를 시퀀스 표현식 중간에 인라인으로 정의한 로컬 배열에 저장하고 인덱스로 참조한다.
+Numeric and string constants used repeatedly in a function body are stored in a locally defined array inlined within sequence expressions, and referenced by index.
 
 ```js
 function(Y, Q, c, l, G, X, W, J, b, P) {
-    // b = [14, 1, "call"] 이 시퀀스 표현식 안에서 인라인으로 할당됨
+    // b = [14, 1, "call"] assigned inline within a sequence expression
     (Y & 94) == Y && (b = [14, 1, "call"], ...)
 
     W[b[2]](J, G)   // → W.call(J, G)
@@ -76,18 +76,18 @@ function(Y, Q, c, l, G, X, W, J, b, P) {
 
 ---
 
-### 1.5 함수 다중화 (Function Multiplexing)
+### 1.5 Function Multiplexing
 
-논리적으로 서로 다른 여러 함수를 하나의 함수로 병합하고, 숫자 파라미터를 **블록 선택자**로 사용한다. 비트 조건으로 활성 블록을 결정하며 호출부에서 숫자 리터럴을 선택자로 전달한다.
+Multiple logically distinct functions are merged into a single function, using a numeric parameter as a **block selector**. Bitwise conditions determine the active block, and numeric literals are passed at call sites as selectors.
 
 ```js
 function(N, y, U, Y, h, H, m, C, u) {
     C = [26, 47, 6];
 
-    // 블록 1: 값을 문자열로 변환하는 로직
+    // Block 1: logic to convert a value to a string
     if ((N - 2 ^ 14) < N && (N - C[2] | 28) >= N) { ... }
 
-    // 블록 2: 에러 처리 로직
+    // Block 2: error handling logic
     if ((N + 4 & 40) >= N && (N + 5 & C[0]) < N) {
         Y = bB();
         throw Error(Y === void 0 ? "unexpected value " + U + y : Y);
@@ -99,9 +99,9 @@ function(N, y, U, Y, h, H, m, C, u) {
 
 ---
 
-### 1.6 논리 연산자 분기 (Logical Operator Branching)
+### 1.6 Logical Operator Branching
 
-`if` / `if-else` 블록을 논리 연산자 단락 평가(short-circuit evaluation)로 대체한다. 시퀀스 표현식 및 제어 흐름 평탄화(CFF)와 결합하면 여러 분기가 하나의 연속된 쉼표 표현식처럼 보인다.
+`if` / `if-else` blocks are replaced with logical operator short-circuit evaluation. Combined with sequence expressions and control flow flattening (CFF), multiple branches appear as a single continuous comma expression.
 
 ```js
 // if (a) { block }
@@ -113,7 +113,7 @@ a || (block)
 // if (a) { x } else { y }
 a ? x : y
 
-// CFF + 시퀀스 표현식과 결합된 예시
+// Example combined with CFF + sequence expressions
 (Y | 1) & 14 || (c = Q.O, J = c.O.length + c.g.length),
 (Y ^ 59) >> 3 == 3 && (Q.classList
     ? Q.classList.add(c)
@@ -122,9 +122,9 @@ a ? x : y
 
 ---
 
-### 1.7 네이티브 메서드 바인딩 상수화 (Bind Native Methods Constants)
+### 1.7 Bind Native Methods as Constants
 
-브라우저 네이티브 메서드를 원래 수신자(receiver)에 바인딩한 후 상수로 저장하여 템퍼링을 방지한다. 외부에서 `Math.floor`를 재정의해도 이미 바인딩된 참조는 영향을 받지 않는다.
+Browser native methods are bound to their original receiver and stored as constants to prevent tampering. Even if `Math.floor` is redefined externally, the already-bound reference is unaffected.
 
 ```js
 LO =
@@ -145,27 +145,27 @@ Ge(obj, prop); // Object.defineProperty(obj, prop)
 
 ---
 
-### 1.8 데드 코드 삽입 (Dead Code Injection)
+### 1.8 Dead Code Injection
 
-접근 불가능하거나 사용되지 않는 코드 블록을 파일 전체에 삽입하여 60,000줄 이상으로 부풀린다. 정적 분석과 LLM 기반 역공학을 방해하는 효과가 있다.
-
----
-
-### 1.9 제어 흐름 평탄화 (Control Flow Flattening, CFF)
-
-선언문과 루프를 포함한 모든 코드를 **플랫 상태 기계(flat state machine)** 로 변환한다. 중앙 "디스패처" 블록을 통해 모든 코드 블록을 라우팅하므로 원래 실행 흐름이 숨겨진다.
-
-- 디스패처는 버전마다 형태가 달라진다 (상태 변수 2~3개, 루프/조건 타입 변경).
-- `try` 블록과 `catch` 블록을 각각 별도 상태 변수로 처리하는 변형도 존재한다.
+Unreachable or unused code blocks are inserted throughout the file, inflating it to over 60,000 lines. This hinders static analysis and LLM-based reverse engineering.
 
 ---
 
-### 1.10 암호화된 문자열 풀 (Encrypted String Pool)
+### 1.9 Control Flow Flattening (CFF)
 
-DOM API, 브라우저 프로퍼티, CSS 값, 에러 메시지 등 **모든 문자열 리터럴**을 단일 거대 암호화 풀에 저장한다. 복호화 함수는 시드(seed)와 **LCG 기반 XOR 암호**를 사용해 런타임에 각 문자열을 추출한다.
+All code — including declarations and loops — is transformed into a **flat state machine**. All code blocks are routed through a central "dispatcher" block, hiding the original execution flow.
 
-- 코드 전체에 1,990개 이상의 호출 지점이 분산됨
-- 복호화 함수는 실행 중인 키(running key)를 누적하여 각 문자가 이전 모든 문자에 의존하게 만듦
+- The dispatcher changes shape between versions (2–3 state variables, different loop/condition types).
+- A variant exists that handles `try` and `catch` blocks with separate state variables each.
+
+---
+
+### 1.10 Encrypted String Pool
+
+**All string literals** — DOM APIs, browser properties, CSS values, error messages — are stored in a single large encrypted pool. A decryption function extracts each string at runtime using a seed and an **LCG-based XOR cipher**.
+
+- Over 1,990 call sites are spread throughout the code
+- The decryption function accumulates a running key so each character depends on all preceding characters
 
 ```js
 X = function (J, b, P, F, U) {
@@ -173,11 +173,11 @@ X = function (J, b, P, F, U) {
   for (F = ((P = 0), (b = ""), l); P < Q; P++)
     ((J = (U[2][U[0]](c + P) ^ F) & U[1]), // XOR with running key
       (b += String.fromCodePoint(J)),
-      (F += J)); // 키 누적
+      (F += J)); // key accumulation
   return (G = b);
 };
 
-// 호출 지점마다 시드를 전달해 각 문자열을 복호화
+// Each call site passes a seed to decrypt its string
 Z[23](64, 4, 54961, 103)(); // → "lang"
 Z[23](66, 4, 54961, 103)(); // → "addEventListener"
 Z[23](32, 12, 20287, 852)(); // → "inline-block"
@@ -185,140 +185,140 @@ Z[23](32, 12, 20287, 852)(); // → "inline-block"
 
 ---
 
-### 1.11 상태 기반 값 반복자 (Stateful Value Iterator)
+### 1.11 Stateful Value Iterator
 
-`window`, `document.body`, 숫자 상수 등 런타임 객체/값을 고정된 순서로 반환하는 **상태 보유 함수**. 내부 커서를 매 호출마다 전진시키며, 순서를 벗어나거나 너무 많이 호출하면 이후 모든 읽기 값이 손상된다. 또한 **타임아웃 메커니즘**이 내장되어 있어 일정 시간이 지나면 `null`을 반환한다.
+A **stateful function** that returns runtime objects/values — such as `window`, `document.body`, and numeric constants — in a fixed order. The internal cursor advances on each call; reading out of order or calling too many times corrupts all subsequent reads. It also has a built-in **timeout mechanism** that returns `null` after a certain time.
 
 ```js
 c(); // → window
 c(); // → document.body
 c(); // → 123
-c(); // → null (타임아웃 만료)
+c(); // → null (timeout expired)
 
-// 실제 사용 예
+// Real usage example
 c().querySelectorAll(a[X[2]](98, X[1], X[1]));
 // ↑ document.body
 ```
 
-> **역공학 시 주의**: 디버거로 중단점을 설정하면 타임아웃이 만료되어 커서 상태가 무효화된다.
+> **Note for reverse engineers**: Setting a debugger breakpoint causes the timeout to expire, invalidating the cursor state.
 
 ---
 
-### 1.12 계산된 함수 테이블 (Computed Function Table)
+### 1.12 Computed Function Table
 
-간접 함수 테이블과 유사하지만, 가져올 함수의 인덱스를 **런타임에 시드, XOR, 모듈러 연산**으로 계산한다. 50개 이상의 함수로 구성된 테이블에서 동적으로 선택한다.
+Similar to the indirect function table, but the index of the function to retrieve is **computed at runtime** using seeds, XOR, and modular arithmetic. Functions are dynamically selected from a table of 50 or more.
 
 ```js
 c = (((Q ^ no) | U[1]) >> 5) + no;
-A = mN[((c % U[2]) + U[2]) % U[2]]; // mN은 50개 이상의 함수 테이블
+A = mN[((c % U[2]) + U[2]) % U[2]]; // mN is a table of 50+ functions
 
-q[29](5, 6977); // seed=6977 → mN[X] 함수 선택
-q[29](53, 6187); // seed=6187 → 다른 인덱스, 다른 함수 선택
+q[29](5, 6977); // seed=6977 → selects mN[X]
+q[29](53, 6187); // seed=6187 → different index, different function
 ```
 
 ---
 
-### 1.13 런타임 값 암호화 (Runtime Value Encryption)
+### 1.13 Runtime Value Encryption
 
-캡차 설정 파라미터, 앵커 파라미터 등 **민감한 값**은 평문으로 저장되지 않는다. 수집 직후 즉시 암호화되고 사용 시점에만 복호화된다. 코드상에서 접두사 `B`로 식별된다.
-
----
-
-### 1.14 비동기 제어 흐름 난독화 (Async Control Flow Obfuscation)
-
-동기 로직을 **제너레이터 기반 상태 기계**로 변환하고 재귀적인 `Promise` 체인으로 래핑한다. 디버거에서 값을 추적하려면 여러 비동기 핸들러를 단계별로 거쳐야 하며, 각 `.then()` 경계에서 원래 실행 컨텍스트를 잃게 된다.
+**Sensitive values** such as CAPTCHA configuration parameters and anchor parameters are never stored in plaintext. They are encrypted immediately upon collection and decrypted only at the point of use. They are identified by the prefix `B` in the code.
 
 ---
 
-## 2. 디버깅 및 템퍼링 방지 기법
+### 1.14 Async Control Flow Obfuscation
 
-### 2.1 심볼 기반 무결성 태그 (Symbol-based Integrity Tag)
+Synchronous logic is transformed into a **generator-based state machine** and wrapped in recursive `Promise` chains. Tracing values in a debugger requires stepping through multiple async handlers, losing the original execution context at each `.then()` boundary.
 
-reCAPTCHA는 숫자 값을 담는 **모든 배열과 객체**에 `Symbol(jas)` 키를 정수 무결성 체크 값으로 설정한다.
+---
 
-- Symbol은 비열거형(non-enumerable)이므로 `JSON.stringify` 등 표준 복제 연산에 보이지 않는다.
-- 구조를 교체하거나 복제하면 태그가 사라지고, reCAPTCHA가 이를 **템퍼링으로 탐지**한다.
+## 2. Anti-debugging / Anti-tampering Techniques
+
+### 2.1 Symbol-based Integrity Tag
+
+reCAPTCHA sets a `Symbol("jas")` key with an integer integrity check value on **every array and object** that holds numeric values.
+
+- Symbols are non-enumerable, so they are invisible to standard cloning operations like `JSON.stringify`.
+- Replacing or cloning a structure removes the tag, and reCAPTCHA **detects this as tampering**.
 
 ```js
-// 개념적 표현
+// Conceptual representation
 const arr = [1, 2, 3];
-arr[Symbol("jas")] = 0xdeadbeef; // 무결성 태그
+arr[Symbol("jas")] = 0xdeadbeef; // integrity tag
 
-// JSON.stringify(arr) → "[1,2,3]"  (태그 누락)
-// reCAPTCHA가 태그 부재를 감지 → 템퍼링 판정
+// JSON.stringify(arr) → "[1,2,3]"  (tag missing)
+// reCAPTCHA detects missing tag → tampering verdict
 ```
 
 ---
 
-### 2.2 클로저 변수 캡처 (Closure Variable Capture)
+### 2.2 Closure Variable Capture
 
-일부 값은 **외부 함수의 스코프**에 의도적으로 격리되고, 중첩된 콜백이나 클로저 내부에서만 소비된다. 변수가 사용되는 스코프와 선언된 스코프가 달라 디버거에서 값을 직접 검사하거나 후킹하기 어렵다.
-
----
-
-### 2.3 소스 탭 크래시 (Crash Source Tab)
-
-특정 타임아웃(setInterval) 만료 시, 개발자 도구의 소스(Source) 탭이 약 10~15초간 크래시된다. 이 현상은 디버깅 세션을 방해하고 중단점 기반 분석을 어렵게 만든다.
+Some values are intentionally isolated within **an outer function's scope** and consumed only inside nested callbacks or closures. The discrepancy between where a variable is used and where it is declared makes it difficult to inspect or hook values in a debugger.
 
 ---
 
-### 2.4 핑거프린트 값의 elapsed 측정 (Timing-based Hook Detection)
+### 2.3 Crash Source Tab
 
-각 핑거프린트 서브필드는 다음 형식을 가진다:
+When a certain timeout (`setInterval`) expires, the developer tools Source tab crashes for approximately 10–15 seconds. This disrupts the debugging session and makes breakpoint-based analysis more difficult.
+
+---
+
+### 2.4 Fingerprint Elapsed Time Measurement (Timing-based Hook Detection)
+
+Each fingerprint sub-field has the following format:
 
 ```
 [value, key, elapsed]
 ```
 
-- `elapsed`: 컬렉터가 값을 수집하고 암호화하는 데 걸린 시간(ms)
-- reCAPTCHA 서버는 이 값을 분석하여 아래 이상 징후를 탐지한다:
+- `elapsed`: time in ms it took for the collector to gather the value and encrypt it
+- The reCAPTCHA server analyzes this value to detect the following anomalies:
 
-| 이상 상황          | 탐지 방법                              |
-| ------------------ | -------------------------------------- |
-| 과도하게 빠른 실행 | elapsed 값이 비정상적으로 낮음         |
-| 후킹(Hook)         | 수집 시간이 비정상적으로 길거나 균일함 |
-| 중단점(Breakpoint) | elapsed 값이 수 초 이상으로 폭증       |
-| 샌드박싱           | 특정 컬렉터의 elapsed가 0으로 고정     |
-
----
-
-### 2.5 상태 기반 반복자 타임아웃 (Stateful Iterator Timeout)
-
-[1.11절](#111-상태-기반-값-반복자-stateful-value-iterator)에서 설명한 Stateful Value Iterator는 **안티디버깅 역할도 수행**한다.
-
-- 디버거로 실행을 중단하면 내부 타임아웃이 만료됨
-- 이후 커서 읽기가 모두 `null`을 반환 → 핑거프린트 수집 실패
-- 결과적으로 비정상적인 fingerprint가 서버로 전송되어 봇 판정 가능성 상승
+| Anomaly                   | Detection Method                                         |
+| ------------------------- | -------------------------------------------------------- |
+| Abnormally fast execution | `elapsed` value is unusually low                         |
+| Hooking                   | Collection time is abnormally long or uniformly constant |
+| Breakpoints               | `elapsed` spikes to several seconds or more              |
+| Sandboxing                | `elapsed` for certain collectors is fixed at 0           |
 
 ---
 
-### 2.6 네이티브 메서드 보호 (Native Method Protection)
+### 2.5 Stateful Iterator Timeout
 
-[1.7절](#17-네이티브-메서드-바인딩-상수화-bind-native-methods-constants)의 바인딩 상수화 기법은 **동시에 안티탬퍼링** 역할을 한다.
+The Stateful Value Iterator described in [Section 1.11](#111-stateful-value-iterator) also serves an **anti-debugging role**.
 
-- `Math.floor`, `Math.random`, `Object.defineProperty` 등을 미리 바인딩
-- 외부 스크립트나 브라우저 확장이 프로토타입을 수정해도 이미 캡처된 바인딩은 영향받지 않음
-- Prototype pollution 공격 방어
+- Pausing execution with a debugger causes the internal timeout to expire
+- Subsequent cursor reads all return `null` → fingerprint collection fails
+- This results in an abnormal fingerprint being sent to the server, increasing the likelihood of a bot verdict
 
 ---
 
-## 3. BotGuard 내부 구조
+### 2.6 Native Method Protection
 
-> **참고**: Google은 2026년 4월 1일부로 reCAPTCHA에서 BotGuard를 제거했다.
+The binding-as-constants technique from [Section 1.7](#17-bind-native-methods-as-constants) simultaneously acts as **anti-tampering**.
 
-### 3.1 ARX 암호 (ARX Cipher)
+- `Math.floor`, `Math.random`, `Object.defineProperty`, etc. are pre-bound
+- Even if external scripts or browser extensions modify the prototype, the already-captured bindings are unaffected
+- Defends against prototype pollution attacks
 
-BotGuard VM은 **ARX 암호**(NSA가 2013년에 개발, Speck과 유사)를 사용하여 토큰 데이터를 암호화한다. 버전마다 상수값(예: `3990`), 연산 순서, 라운드 수가 달라진다.
+---
+
+## 3. BotGuard Internal Structure
+
+> **Note**: Google removed BotGuard from reCAPTCHA as of April 1, 2026.
+
+### 3.1 ARX Cipher
+
+The BotGuard VM uses an **ARX cipher** (similar to Speck, developed by the NSA in 2013) to encrypt token data. Constants (e.g., `3990`), operation order, and round count differ between versions.
 
 ```js
 Vl = function (D, P, E, F, v) {
-  // D → 암호 상태 배열, P → 시드, E → 바이트 인덱스
+  // D → cipher state array, P → seed, E → byte index
   F = D[3] | 0;
   D = D[2] | 0;
   for (v = 0; v < 14; v++) {
     E = (E >>> 8) | (E << 24);
     E += P | 0;
-    E ^= D + 3990; // 버전별로 변경되는 상수
+    E ^= D + 3990; // constant that changes per version
     P = (P << 3) | (P >>> 29);
     P ^= E;
     F = (F >>> 8) | (F << 24);
@@ -327,115 +327,124 @@ Vl = function (D, P, E, F, v) {
     D = (D << 3) | (D >>> 29);
     D ^= F;
   }
-  return [(P >>> 24) & 255, (P >>> 16) & 255, (P >>> 8) & 255, (P >>> 0) & 255, (E >>> 24) & 255, (E >>> 16) & 255, (E >>> 8) & 255, (E >>> 0) & 255];
+  return [
+    (P >>> 24) & 255,
+    (P >>> 16) & 255,
+    (P >>> 8) & 255,
+    (P >>> 0) & 255,
+    (E >>> 24) & 255,
+    (E >>> 16) & 255,
+    (E >>> 8) & 255,
+    (E >>> 0) & 255,
+  ];
 };
 ```
 
-### 3.2 버퍼 구조 및 바이트 라이터
+### 3.2 Buffer Structure and Byte Writer
 
-VM은 4종류의 버퍼를 사용하며, 메인 암호화 함수는 암호화 모드와 비암호화 모드를 지원한다.
+The VM uses 4 types of buffers, and the main encryption function supports both encrypted and non-encrypted modes.
 
-| 버퍼 ID | 역할                                                |
-| ------- | --------------------------------------------------- |
-| `180`   | 메인 버퍼                                           |
-| `353`   | 엔트로피 패드 버퍼                                  |
-| `304`   | 에러 버퍼                                           |
-| `243`   | PoE(Proof of Execution) 버퍼 (이 버전에서는 미사용) |
+| Buffer ID | Role                                                     |
+| --------- | -------------------------------------------------------- |
+| `180`     | Main buffer                                              |
+| `353`     | Entropy pad buffer                                       |
+| `304`     | Error buffer                                             |
+| `243`     | PoE (Proof of Execution) buffer (unused in this version) |
 
-암호화 모드에서는 ARX 암호로 키스트림을 생성하고 XOR 연산으로 데이터를 암호화한다:
+In encrypted mode, keystream is generated via the ARX cipher and data is encrypted with XOR:
 
 ```js
 v.push(v.zB[A & 7] ^ h);
-// A의 하위 3비트로 키스트림 바이트를 선택, 데이터와 XOR
+// lower 3 bits of A select the keystream byte, XOR'd with data
 ```
 
-### 3.3 토큰 무결성 검증
+### 3.3 Token Integrity Verification
 
-VM은 다음과 같은 비정상 상태를 감지하면 에러 토큰을 생성한다:
+The VM generates an error token when it detects any of the following abnormal states:
 
-- 바이트코드 오프셋 편차
-- VM 레지스터 누락
-- 잘못된 VM 상태
-- 제어 흐름 무결성(CFI) 위반
+- Bytecode offset deviation
+- Missing VM registers
+- Invalid VM state
+- Control Flow Integrity (CFI) violation
 
-에러 감지기(dispatcher)는 에러 발생 시 에러 버퍼(`304`)와 메인 버퍼(`180`)에 에러 바이트를 기록하고, VM 실행 종료 시 이를 서버로 전송하는 토큰에 포함시킨다.
+When an error is detected, the error dispatcher records error bytes into the error buffer (`304`) and main buffer (`180`), which are then included in the token sent to the server when VM execution ends.
 
 ---
 
-## 4. 핑거프린트 타이밍 기반 감지
+## 4. Fingerprint Timing-based Detection
 
-핑거프린트 수집 파이프라인은 단순한 값 수집을 넘어 **수집 과정 자체를 감시**한다.
+The fingerprint collection pipeline goes beyond simply gathering values — it **monitors the collection process itself**.
 
-### 4.1 컬렉터 실행 순서 (Collector Execution Order)
+### 4.1 Collector Execution Order
 
-내부 스케줄러가 정해진 순서대로 컬렉터를 실행한다:
+An internal scheduler runs collectors in a fixed order:
 
 ```
 [42, 45, 53, 30, 28, 54, 29, 31, 32, 33, 34, 35, 37, 36, 38, 39,
  43, 40, 41, 46, 48, 57, 58, 60, 61, 62, 63, 64, 66, 68, 69, 71, 72, 79, 55]
 ```
 
-### 4.2 신호 코드 파생 파이프라인
+### 4.2 Signal Code Derivation Pipeline
 
-각 핑거프린트 값은 다음 단계를 거쳐 암호화 키로 변환된다:
+Each fingerprint value passes through the following stages to become an encryption key:
 
 ```
 Raw Value
    ↓
-Signal Code Derivation  (결정론적 식별자 생성)
+Signal Code Derivation  (generates deterministic identifier)
    ↓
 Compact Signal Code
    ↓
-Numeric Key Derivation  (숫자 암호화 키로 변환)
+Numeric Key Derivation  (converts to numeric encryption key)
    ↓
 Encryption Key
    ↓
 Value Encryption
 ```
 
-예시:
+Example:
 
 ```
-입력:       "BUTTON,195a81c9"
-신호 코드:  "wg"
-숫자 키:    3792
-암호화:     encryptValueWithKey(3792, "wgia1z9pwq") → "bYVbh6BUsE_5pLA"
+Input:          "BUTTON,195a81c9"
+Signal code:    "wg"
+Numeric key:    3792
+Encrypted:      encryptValueWithKey(3792, "wgia1z9pwq") → "bYVbh6BUsE_5pLA"
 ```
 
-동일한 입력 값은 항상 동일한 신호 코드와 암호화 키를 생성한다(결정론적).
+The same input value always produces the same signal code and encryption key (deterministic).
 
-### 4.3 VM 신호 기반 감지
+### 4.3 VM Signal-based Detection
 
-VM 신호(Idx 73)에는 각 컬렉터의 실행 시간이 포함된다:
+VM signal (Idx 73) includes the execution time for each collector:
 
 ```json
 [null, collectorElapsed, encryptElapsed, value]
 ```
 
-- `collectorElapsed`: 값 수집에 걸린 시간(ms)
-- `encryptElapsed`: 값 암호화에 걸린 시간(ms)
+- `collectorElapsed`: time in ms to collect the value
+- `encryptElapsed`: time in ms to encrypt the value
 
-디버거 중단점이나 후킹 시 이 값들이 비정상적으로 커져 탐지된다.
+When a debugger breakpoint or hook is present, these values become abnormally large and trigger detection.
 
 ---
 
-## 5. 종합 요약
+## 5. Summary
 
-| 카테고리   | 기법                   | 주요 목적                |
-| ---------- | ---------------------- | ------------------------ |
-| 난독화     | 시퀀스 표현식, MBA     | 코드 가독성 저하         |
-| 난독화     | 간접/계산 함수 테이블  | 정적 분석 방해           |
-| 난독화     | 암호화 문자열 풀       | 문자열 추출 방지         |
-| 난독화     | 제어 흐름 평탄화       | 실행 흐름 추적 방해      |
-| 난독화     | 비동기 제어 흐름       | 디버거 단계 추적 방해    |
-| 난독화     | 다형성                 | 버전별 코드 구조 변경    |
-| 안티디버깅 | 심볼 무결성 태그       | 객체 복제/교체 탐지      |
-| 안티디버깅 | 클로저 변수 캡처       | 변수 후킹 방지           |
-| 안티디버깅 | 소스 탭 크래시         | 개발자 도구 사용 방해    |
-| 안티디버깅 | Elapsed 시간 측정      | 중단점·후킹 탐지         |
-| 안티디버깅 | 상태 반복자 타임아웃   | 디버거 일시 정지 탐지    |
-| 안티탬퍼링 | 네이티브 메서드 바인딩 | Prototype pollution 방어 |
-| 암호화     | ARX Cipher (BotGuard)  | 토큰 데이터 암호화       |
-| 암호화     | 런타임 값 암호화       | 파라미터 평문 노출 방지  |
+| Category       | Technique                         | Primary Purpose                      |
+| -------------- | --------------------------------- | ------------------------------------ |
+| Obfuscation    | Sequence expressions, MBA         | Reduce code readability              |
+| Obfuscation    | Indirect/computed function tables | Hinder static analysis               |
+| Obfuscation    | Encrypted string pool             | Prevent string extraction            |
+| Obfuscation    | Control flow flattening           | Hide execution flow                  |
+| Obfuscation    | Async control flow                | Hinder debugger step-tracing         |
+| Obfuscation    | Polymorphism                      | Vary code structure per version      |
+| Anti-debugging | Symbol integrity tag              | Detect object cloning/replacement    |
+| Anti-debugging | Closure variable capture          | Prevent variable hooking             |
+| Anti-debugging | Crash source tab                  | Disrupt developer tools usage        |
+| Anti-debugging | Elapsed time measurement          | Detect breakpoints and hooks         |
+| Anti-debugging | Stateful iterator timeout         | Detect debugger pauses               |
+| Anti-tampering | Native method binding             | Defend against prototype pollution   |
+| Encryption     | ARX Cipher (BotGuard)             | Encrypt token data                   |
+| Encryption     | Runtime value encryption          | Prevent plaintext parameter exposure |
 
-> **면책 조항**: 이 문서는 순전히 교육 및 연구 목적으로 작성되었습니다. 내용은 원 저장소의 기술 분석을 한국어로 정리한 것이며, reCAPTCHA 우회를 목적으로 사용해서는 안 됩니다.
+> **Disclaimer**: This document is written purely for educational and research purposes. The content is a technical summary of the original repository's analysis and must not be used to bypass reCAPTCHA.
