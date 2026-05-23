@@ -40,9 +40,12 @@ export function protect(source: string, options: HazeOptions = {}): ProtectResul
   applyObfuscation(ast, options.obfuscation, appliedPasses);
   applyAntiDebug(ast, options.antiDebug, appliedPasses);
 
+  const stripComments = options.stripComments !== false;
+
   const { code } = generate(ast, {
     minified: options.minify ?? false,
     compact: options.minify ?? false,
+    shouldPrintComment: stripComments ? () => false : undefined,
   });
 
   return { code, appliedPasses };

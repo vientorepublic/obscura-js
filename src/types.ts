@@ -75,6 +75,8 @@ export interface HazeOptions {
   antiDebug?: AntiDebugOptions;
   /** Minify the output (removes whitespace and shortens literals). Default: false */
   minify?: boolean;
+  /** Strip all comments from the output. Default: true */
+  stripComments?: boolean;
 }
 
 // ─── Protect result ──────────────────────────────────────────────────────────

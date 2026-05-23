@@ -26,6 +26,7 @@ program
   .option("--no-tag", "Disable symbol integrity tag pass")
   .option("--sp-seed <number>", "Seed for the string pool XOR cipher", parseInt)
   .option("--minify", "Minify output (compact whitespace, shorten literals)")
+  .option("--keep-comments", "Preserve original comments in output (default: strip all)")
   .action((input: string, opts: Record<string, unknown>) => {
     const inputPath = resolve(process.cwd(), input);
     const source = readFileSync(inputPath, "utf-8");
@@ -44,6 +45,7 @@ program
         integrityTag: opts["tag"] === false ? false : {},
       },
       minify: opts["minify"] === true,
+      stripComments: opts["keepComments"] !== true,
     };
 
     const { code, appliedPasses } = protect(source, options);

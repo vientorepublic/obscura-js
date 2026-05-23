@@ -62,6 +62,9 @@ npx obscura-js protect app.js -o app.protected.js
 
 # Minify output
 npx obscura-js protect app.js --minify
+
+# Preserve original comments (stripped by default)
+npx obscura-js protect app.js --keep-comments
 ```
 
 ## API Reference
@@ -99,6 +102,7 @@ interface HazeOptions {
     integrityTag?: { tagDescription?: string } | false;
   };
   minify?: boolean; // Default: false
+  stripComments?: boolean; // Default: true — strip all comments from output
 }
 ```
 
@@ -124,6 +128,7 @@ protect(source, {
     integrityTag: { tagDescription: "myapp" },
   },
   minify: true,
+  stripComments: false, // keep original comments
 });
 ```
 
@@ -133,19 +138,20 @@ protect(source, {
 obscura-js protect <input> [options]
 ```
 
-| Option                | Description                                          |
-| --------------------- | ---------------------------------------------------- |
-| `-o, --output <file>` | Output file path (default: `<input>.obscura.js`)     |
-| `--no-seq`            | Disable `sequenceExpression` pass                    |
-| `--no-mba`            | Disable `mba` pass                                   |
-| `--no-ft`             | Disable `functionTable` pass                         |
-| `--no-sp`             | Disable `stringPool` pass                            |
-| `--no-cff`            | Disable `controlFlowFlattening` pass                 |
-| `--no-dead`           | Disable `deadCode` pass                              |
-| `--no-native`         | Disable `nativeBinding` pass                         |
-| `--no-tag`            | Disable `integrityTag` pass                          |
-| `--sp-seed <number>`  | XOR seed for the string pool cipher                  |
-| `--minify`            | Compact output (remove whitespace, shorten literals) |
+| Option                | Description                                            |
+| --------------------- | ------------------------------------------------------ |
+| `-o, --output <file>` | Output file path (default: `<input>.obscura.js`)       |
+| `--no-seq`            | Disable `sequenceExpression` pass                      |
+| `--no-mba`            | Disable `mba` pass                                     |
+| `--no-ft`             | Disable `functionTable` pass                           |
+| `--no-sp`             | Disable `stringPool` pass                              |
+| `--no-cff`            | Disable `controlFlowFlattening` pass                   |
+| `--no-dead`           | Disable `deadCode` pass                                |
+| `--no-native`         | Disable `nativeBinding` pass                           |
+| `--no-tag`            | Disable `integrityTag` pass                            |
+| `--sp-seed <number>`  | XOR seed for the string pool cipher                    |
+| `--minify`            | Compact output (remove whitespace, shorten literals)   |
+| `--keep-comments`     | Preserve original source comments (default: strip all) |
 
 ## Requirements
 
