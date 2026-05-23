@@ -1,5 +1,9 @@
 # obscura-js
 
+<img width="2492" height="1266" alt="obscura" src="https://github.com/user-attachments/assets/02d32a27-4503-4c72-94d6-b30c205e422b" />
+
+---
+
 A JavaScript code protection library inspired by the obfuscation and anti-debugging techniques used in Google reCAPTCHA.
 
 [![npm version](https://img.shields.io/npm/v/obscura-js)](https://www.npmjs.com/package/obscura-js)
