@@ -1,6 +1,6 @@
-// sample.js — haze obfuscation demo
+// sample.js — Obscura.js obfuscation demo
 
-const SECRET_KEY = "haze-demo-2026";
+const SECRET_KEY = "obscura-demo-2026";
 const VERSION = "1.0.0";
 
 function add(a, b) {
@@ -12,7 +12,7 @@ function multiply(a, b) {
 }
 
 function greet(name) {
-  const msg = "Hello, " + name + "! Welcome to haze.";
+  const msg = "Hello, " + name + "! Welcome to obscura.";
   if (name === "admin") {
     console.log("Admin access granted.");
   } else {

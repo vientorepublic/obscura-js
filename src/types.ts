@@ -70,7 +70,7 @@ export interface AntiDebugOptions {
 
 // ─── Top-level options ───────────────────────────────────────────────────────
 
-export interface HazeOptions {
+export interface ObscuraOptions {
   obfuscation?: ObfuscationOptions;
   antiDebug?: AntiDebugOptions;
   /** Minify the output (removes whitespace and shortens literals). Default: false */

@@ -1,6 +1,6 @@
 {
   "name": "obscura-js",
-  "version": "0.3.1",
+  "version": "1.0.0",
   "description": "JavaScript code protection tool — obfuscation & anti-debugging inspired by Google reCAPTCHA",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -16,10 +16,10 @@
   ],
   "sideEffects": false,
   "bin": {
-    "obscura-js": "dist/bin/haze.js"
+    "obscura-js": "dist/bin/obscura_cli.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x dist/bin/haze.js",
+    "build": "tsc && chmod +x dist/bin/obscura_cli.js",
     "build:watch": "tsc --watch",
     "prepublishOnly": "npm run build && npm test",
     "test": "jest --coverage",
@@ -27,7 +27,7 @@
     "lint:fix": "eslint src/ bin/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"bin/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"bin/**/*.ts\" \"tests/**/*.ts\"",
-    "dev": "ts-node bin/haze.ts"
+    "dev": "ts-node bin/obscura_cli.ts"
   },
   "keywords": [
     "obfuscation",

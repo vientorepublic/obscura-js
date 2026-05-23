@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { Command } from "commander";
 import { protect } from "../src/index";
-import type { HazeOptions } from "../src/types";
+import type { ObscuraOptions } from "../src/types";
 
 const program = new Command();
 
@@ -31,7 +31,7 @@ program
     const inputPath = resolve(process.cwd(), input);
     const source = readFileSync(inputPath, "utf-8");
 
-    const options: HazeOptions = {
+    const options: ObscuraOptions = {
       obfuscation: {
         sequenceExpression: opts["seq"] === false ? false : {},
         mba: opts["mba"] === false ? false : {},

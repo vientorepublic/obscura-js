@@ -2,9 +2,9 @@ import { parse } from "@babel/parser";
 import generate from "@babel/generator";
 import { applyObfuscation } from "./obfuscation";
 import { applyAntiDebug } from "./antiDebug";
-import type { HazeOptions, ProtectResult } from "./types";
+import type { ObscuraOptions, ProtectResult } from "./types";
 
-export type { HazeOptions, ProtectResult } from "./types";
+export type { ObscuraOptions as HazeOptions, ProtectResult } from "./types";
 export type {
   ObfuscationOptions,
   AntiDebugOptions,
@@ -25,7 +25,7 @@ export type {
  * @param options - Protection configuration
  * @returns       ProtectResult containing the protected code and applied pass names
  */
-export function protect(source: string, options: HazeOptions = {}): ProtectResult {
+export function protect(source: string, options: ObscuraOptions = {}): ProtectResult {
   if (typeof source !== "string") {
     throw new TypeError("source must be a string");
   }
