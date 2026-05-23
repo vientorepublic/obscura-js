@@ -1,4 +1,4 @@
-# obscura-js
+# Obscura.js
 
 <img width="2492" height="1266" alt="obscura" src="https://github.com/user-attachments/assets/02d32a27-4503-4c72-94d6-b30c205e422b" />
 
@@ -23,14 +23,6 @@ A JavaScript code protection library inspired by the obfuscation and anti-debugg
 | Anti-debug  | `nativeBinding`         | Pre-bind native methods to defend against prototype pollution       |
 | Anti-debug  | `integrityTag`          | Attach Symbol-based integrity tags to detect object cloning/replace |
 
-## Getting Started
-
-```bash
-npm install
-npm run build
-npm test
-```
-
 ## Installation
 
 ```bash
@@ -38,22 +30,6 @@ npm install obscura-js
 ```
 
 ## Quick Start
-
-### API
-
-```typescript
-import { protect } from "obscura-js";
-import { readFileSync } from "fs";
-
-const source = readFileSync("app.js", "utf-8");
-
-const { code, appliedPasses } = protect(source);
-// All 8 passes are enabled by default
-
-console.log(appliedPasses);
-// ['sequenceExpression', 'mba', 'functionTable', 'stringPool',
-//  'controlFlowFlattening', 'deadCode', 'nativeBinding', 'integrityTag']
-```
 
 ### CLI
 
@@ -71,6 +47,22 @@ npx obscura-js protect app.js --minify
 npx obscura-js protect app.js --keep-comments
 ```
 
+### API
+
+```typescript
+import { protect } from "obscura-js";
+import { readFileSync } from "fs";
+
+const source = readFileSync("app.js", "utf-8");
+
+const { code, appliedPasses } = protect(source);
+// All 8 passes are enabled by default
+
+console.log(appliedPasses);
+// ['sequenceExpression', 'mba', 'functionTable', 'stringPool',
+//  'controlFlowFlattening', 'deadCode', 'nativeBinding', 'integrityTag']
+```
+
 ## API Reference
 
 ### `protect(source, options?)`
@@ -78,7 +70,7 @@ npx obscura-js protect app.js --keep-comments
 | Parameter | Type          | Description                       |
 | --------- | ------------- | --------------------------------- |
 | `source`  | `string`      | JavaScript source code to protect |
-| `options` | `HazeOptions` | Optional configuration            |
+| `options` | `ObscuraOptions` | Optional configuration            |
 
 Returns `ProtectResult`:
 
@@ -89,10 +81,10 @@ interface ProtectResult {
 }
 ```
 
-### `HazeOptions`
+### `ObscuraOptions`
 
 ```typescript
-interface HazeOptions {
+interface ObscuraOptions {
   obfuscation?: {
     sequenceExpression?: { probability?: number } | false;
     mba?: { rounds?: number } | false;
@@ -106,7 +98,7 @@ interface HazeOptions {
     integrityTag?: { tagDescription?: string } | false;
   };
   minify?: boolean; // Default: false
-  stripComments?: boolean; // Default: true — strip all comments from output
+  stripComments?: boolean; // Default: true
 }
 ```
 
