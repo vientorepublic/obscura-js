@@ -16,6 +16,7 @@ jest.config.js
 
 # VCS
 .gitignore
+.github/
 .git/
 
 # Test & coverage output
