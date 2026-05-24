@@ -13,16 +13,88 @@ A JavaScript code protection library inspired by the obfuscation and anti-debugg
 
 ## Features
 
-| Category    | Pass                    | Description                                                         |
-| ----------- | ----------------------- | ------------------------------------------------------------------- |
-| Obfuscation | `sequenceExpression`    | Flatten `if` blocks into comma-sequence expressions                 |
-| Obfuscation | `mba`                   | Expand arithmetic into Mixed Boolean Arithmetic (MBA) expressions   |
-| Obfuscation | `functionTable`         | Move function declarations into an indirect table, call by index    |
-| Obfuscation | `stringPool`            | Encrypt all string literals into an LCG-XOR pool                    |
-| Obfuscation | `controlFlowFlattening` | Transform function bodies into flat state machines                  |
-| Obfuscation | `deadCode`              | Inject unreachable code blocks                                      |
-| Anti-debug  | `nativeBinding`         | Pre-bind native methods to defend against prototype pollution       |
-| Anti-debug  | `integrityTag`          | Attach Symbol-based integrity tags to detect object cloning/replace |
+| Category    | Pass                    | Description                                                              |
+| ----------- | ----------------------- | ------------------------------------------------------------------------ |
+| Obfuscation | `sequenceExpression`    | Flatten `if` blocks into comma-sequence expressions                      |
+| Obfuscation | `mba`                   | Expand arithmetic into Mixed Boolean Arithmetic (MBA) expressions        |
+| Obfuscation | `functionTable`         | Move function declarations into an indirect table, call by index         |
+| Obfuscation | `stringPool`            | Encrypt string literals and template literal quasis into an LCG-XOR pool |
+| Obfuscation | `controlFlowFlattening` | Transform function bodies into flat state machines                       |
+| Obfuscation | `deadCode`              | Inject unreachable code blocks                                           |
+| Anti-debug  | `nativeBinding`         | Pre-bind native methods to defend against prototype pollution            |
+| Anti-debug  | `integrityTag`          | Attach Symbol-based integrity tags to detect object cloning/replace      |
+
+## Input Format Support
+
+Obscura.js auto-detects the module format of the input file (`sourceType: "unambiguous"`) and handles all three variants:
+
+| Format           | Example                        | Notes                                                             |
+| ---------------- | ------------------------------ | ----------------------------------------------------------------- |
+| CommonJS (CJS)   | `require()` / `module.exports` | `require()` paths are never encrypted to preserve static analysis |
+| ES Modules (ESM) | `import` / `export`            | Module specifier strings are never encrypted                      |
+| JSX              | `<Component prop="value" />`   | Attribute strings are wrapped in `{}` after encryption            |
+
+### Per-pass ESM / CJS behaviour
+
+Passes fall into two categories: **format-aware** (contain explicit logic for module syntax) and **format-agnostic** (operate purely on expressions/statements, no module knowledge required).
+
+#### Format-aware passes
+
+**`functionTable`** — avoids removing functions that are reachable from outside the module.
+
+| Pattern                         | Example                         | Behaviour                                                          |
+| ------------------------------- | ------------------------------- | ------------------------------------------------------------------ |
+| ESM named export                | `export { foo }`                | `foo` is kept as a top-level declaration; not moved into the table |
+| ESM default export (identifier) | `export default foo`            | same                                                               |
+| CJS `module.exports`            | `module.exports = foo`          | same                                                               |
+| CJS `module.exports.x`          | `module.exports.add = add`      | same                                                               |
+| CJS `exports.x`                 | `exports.add = add`             | same                                                               |
+| CJS object shorthand            | `module.exports = { add, mul }` | all referenced names are preserved                                 |
+
+**`stringPool`** — selectively skips strings whose values must be preserved for the module system or runtime.
+
+| Pattern                    | Example                                               | Behaviour                                                           |
+| -------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------- |
+| ESM import path            | `import x from "./mod"`                               | skipped — bundlers need the literal path                            |
+| ESM re-export path         | `export { x } from "./mod"` / `export * from "./mod"` | skipped                                                             |
+| Dynamic import path        | `import('./mod')`                                     | skipped — runtime module loader needs the literal                   |
+| CJS require path           | `require("./mod")`                                    | skipped                                                             |
+| CJS require.resolve path   | `require.resolve("./util")`                           | skipped                                                             |
+| ES2022 string binding name | `import { "foo" as bar }` / `export { x as "name" }`  | skipped — spec-mandated string syntax                               |
+| Tagged template            | `` html`<b>${x}</b>` ``                               | skipped — tag receives a `TemplateStringsArray`, not a plain string |
+| All other strings          | `"hello"`, `` `hi ${name}` ``, `{ 'key': v }`         | **encrypted**                                                       |
+
+#### Format-agnostic passes
+
+These passes operate on expressions and statements only. They produce valid output for both CJS and ESM input without any module-specific logic.
+
+| Pass                    | What it touches                                     |
+| ----------------------- | --------------------------------------------------- |
+| `sequenceExpression`    | `if` statement bodies                               |
+| `mba`                   | Binary arithmetic expressions (`+`, `-`, `\|`, `^`) |
+| `controlFlowFlattening` | Function bodies                                     |
+| `deadCode`              | Top-level statement boundaries                      |
+| `nativeBinding`         | Prepends `const` bindings for native methods        |
+| `integrityTag`          | Array and object literals                           |
+
+### What `stringPool` encrypts
+
+| Syntax                    | Example                 | Behaviour                                                                     |
+| ------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
+| String literal            | `"hello"`               | Replaced with a pool decryption call                                          |
+| Template literal          | `` `hello ${x}` ``      | Static quasis encrypted; expressions kept as-is; emitted as `+` concatenation |
+| Object / class string key | `{ 'key': v }`          | Key flipped to computed syntax `{ [pool()]: v }`                              |
+| JSX attribute value       | `<div className="foo">` | Wrapped in `{pool()}` expression container                                    |
+| `export default "…"`      | `export default 'msg'`  | Encrypted normally                                                            |
+
+The following strings are **never** encrypted to avoid breaking the module system:
+
+- `import … from "path"`
+- `require("path")` / `require.resolve("path")`
+- `export { x } from "path"`
+- `export * from "path"`
+- ES2022 string binding names — `import { "name" as x }`, `export { x as "name" }`
+- Tagged template literals — `` html`…` `` (the tag function receives a `TemplateStringsArray`)
 
 ## Installation
 
