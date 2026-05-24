@@ -360,6 +360,158 @@ describe("stringPool", () => {
       expect(el.value).toBeLessThanOrEqual(0xffff);
     }
   });
+
+  // ─── boundary conditions: context-aware encryption ──────────────────────
+
+  it("encrypts non-computed object property string keys (computed flipped)", () => {
+    const vm = require("vm") as typeof import("vm");
+    // { 'foo': 99 } — key must be encrypted; value accessible at runtime
+    const code = parseAndApply("var o = { 'foo': 99 };", (ast) =>
+      applyStringPool(ast, { seed: 42 })
+    );
+    expect(code).not.toContain("'foo'");
+    expect(code).not.toContain('"foo"');
+    // Generator must emit computed syntax [ ] around the encrypted key
+    expect(code).toMatch(/\[_0x[0-9a-f]{8}\(/);
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect((ctx["o"] as Record<string, unknown>)["foo"]).toBe(99);
+  });
+
+  it("encrypts class method string keys and method remains callable", () => {
+    const vm = require("vm") as typeof import("vm");
+    const code = parseAndApply(
+      "class C { 'greet'() { return 'hi'; } } var r = new C().greet();",
+      (ast) => applyStringPool(ast, { seed: 42 })
+    );
+    expect(code).not.toContain("'greet'");
+    expect(code).toMatch(/\[_0x[0-9a-f]{8}\(/);
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe("hi");
+  });
+
+  it("encrypts JSX attribute string values via JSXExpressionContainer", () => {
+    const ast = parse("<div className='bar'>t</div>;", {
+      sourceType: "script",
+      plugins: ["jsx"],
+    });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    // String literal must be gone; expression container must replace it
+    expect(code).not.toContain("'bar'");
+    expect(code).not.toContain('"bar"');
+    expect(code).toContain("className={");
+  });
+
+  it("encrypts export default string value", () => {
+    const ast = parse("export default 'secret';", { sourceType: "module" });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    expect(code).not.toContain("'secret'");
+    expect(code).not.toContain('"secret"');
+    expect(code).toMatch(/export default _0x[0-9a-f]{8}\(/);
+  });
+
+  it("preserves ES2022 export specifier string names", () => {
+    // export { x as 'name' } — 'name' is a binding identifier, must stay
+    const ast = parse("const x = 1; export { x as 'thing' };", { sourceType: "module" });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    expect(code).toMatch(/as 'thing'|as "thing"/);
+  });
+
+  it("preserves ES2022 import specifier string names", () => {
+    // import { 'foo' as bar } — 'foo' is the remote binding name, must stay
+    const ast = parse("import { 'foo' as bar } from './m';", { sourceType: "module" });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    expect(code).toMatch(/'foo' as|"foo" as/);
+  });
+
+  it("skips empty string literals (no pool entry injected)", () => {
+    const code = parseAndApply('var x = "";', (ast) => applyStringPool(ast, { seed: 42 }));
+    // No pool function or pool array should appear — nothing to encrypt
+    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
+    expect(code).toContain('""');
+  });
+
+  // ─── template literal encryption ──────────────────────────────────────────
+
+  it("encrypts all-static template literal into a single pool call", () => {
+    const vm = require("vm") as typeof import("vm");
+    // `hello` has no expressions — result should be just a pool call, not a template
+    const code = parseAndApply("var s = `hello`;", (ast) => applyStringPool(ast, { seed: 42 }));
+    expect(code).not.toContain("`hello`");
+    expect(code).toMatch(/_0x[0-9a-f]{8}\(/);
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["s"]).toBe("hello");
+  });
+
+  it("encrypts static quasis and preserves expressions in template literals", () => {
+    const vm = require("vm") as typeof import("vm");
+    // `prefix${x}suffix` → _0xSP(...) + x + _0xSP(...)
+    const code = parseAndApply("var x = 42; var s = `prefix${x}suffix`;", (ast) =>
+      applyStringPool(ast, { seed: 42 })
+    );
+    expect(code).not.toContain("`prefix${x}suffix`");
+    expect(code).not.toContain("prefix");
+    expect(code).not.toContain("suffix");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["s"]).toBe("prefix42suffix");
+  });
+
+  it("encrypts template literal matching the utxo_algorithm.js console.log pattern", () => {
+    const vm = require("vm") as typeof import("vm");
+    const src = "var a = 50000, b = 20; var s = `[설정] 목표 금액: ${a}, 수수료율: ${b}`;";
+    const code = parseAndApply(src, (ast) => applyStringPool(ast, { seed: 42 }));
+    expect(code).not.toContain("[설정]");
+    expect(code).not.toContain("목표 금액");
+    expect(code).not.toContain("수수료율");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["s"]).toBe("[설정] 목표 금액: 50000, 수수료율: 20");
+  });
+
+  it("skips template literal quasis that are empty strings", () => {
+    // `${x}` has two empty quasis — nothing to encrypt, template unchanged
+    const code = parseAndApply("var x = 1; var s = `${x}`;", (ast) =>
+      applyStringPool(ast, { seed: 42 })
+    );
+    // No pool entries should be created (only x exists as a non-string)
+    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
+  });
+
+  it("does not transform tagged template literals", () => {
+    // html`<b>text</b>` — tag function receives TemplateStringsArray; must not be touched
+    const code = parseAndApply("var r = html`<b>text</b>`;", (ast) =>
+      applyStringPool(ast, { seed: 42 })
+    );
+    // The quasi string must remain intact inside the template syntax
+    expect(code).toContain("<b>text</b>");
+    expect(code).toContain("`");
+  });
+
+  it("encrypts template literals and StringLiterals in the same file with correct runtime values", () => {
+    const vm = require("vm") as typeof import("vm");
+    const src = ['var label = "count";', "var n = 3;", "var msg = `${label}: ${n} items`;"].join(
+      "\n"
+    );
+    const code = parseAndApply(src, (ast) => applyStringPool(ast, { seed: 42 }));
+    expect(code).not.toContain('"count"');
+    expect(code).not.toContain("items");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["msg"]).toBe("count: 3 items");
+  });
 });
 
 // ─── controlFlowFlattening ───────────────────────────────────────────────────
