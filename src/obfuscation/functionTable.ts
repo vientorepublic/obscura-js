@@ -1,6 +1,7 @@
 import traverse, { type NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import type { FunctionTableOptions } from "../types";
+import { genId } from "../genId";
 
 /**
  * Pass: Indirect Function Table
@@ -18,7 +19,7 @@ import type { FunctionTableOptions } from "../types";
  */
 export function applyFunctionTable(ast: t.File, options: FunctionTableOptions = {}): void {
   const minFunctions = options.minFunctions ?? 2;
-  const tableId = "__obscura_ft";
+  const tableId = genId();
 
   // Collect top-level named function declarations first, then remove only if threshold is met
   const functions: { id: string; fn: t.FunctionExpression }[] = [];
@@ -71,7 +72,7 @@ export function applyFunctionTable(ast: t.File, options: FunctionTableOptions = 
     path.remove();
   }
 
-  // Prepend: const __obscura_ft = [fn0, fn1, ...]
+  // Prepend: const <tableId> = [fn0, fn1, ...]
   const tableDeclaration = t.variableDeclaration("const", [
     t.variableDeclarator(t.identifier(tableId), t.arrayExpression(functions.map((f) => f.fn))),
   ]);

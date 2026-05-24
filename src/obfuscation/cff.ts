@@ -1,6 +1,7 @@
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import type { ControlFlowFlatteningOptions } from "../types";
+import { genId } from "../genId";
 
 /**
  * Pass: Control Flow Flattening (CFF)
@@ -29,7 +30,7 @@ export function applyControlFlowFlattening(
   options: ControlFlowFlatteningOptions = {}
 ): void {
   const passes = options.passes ?? 1;
-  const stateVar = "__obscura_s";
+  const stateVar = genId();
 
   /**
    * If `stmt` is a let/const VariableDeclaration, extract the declarators into

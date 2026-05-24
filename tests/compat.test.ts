@@ -142,18 +142,21 @@ describe("ESM compatibility", () => {
 
   it("ESM and CJS produce identical output for the same input", () => {
     const src = `var n = 1 + 2; module.exports = n;`;
-    // Only enable passes that are fully deterministic (no Math.random):
-    //   mba          — deterministic arithmetic rewrites
-    //   functionTable — deterministic lookup-table wrapping
-    // All random passes (deadCode, sequenceExpression, cff, stringPool) disabled.
+    // Only MBA is fully deterministic (no Math.random, no genId).
+    // functionTable and nativeBinding now use genId() per-call, so they
+    // produce different identifier names across separate processes.
     const optsJson = JSON.stringify({
       obfuscation: {
         mba: { rounds: 1 },
-        functionTable: true,
+        functionTable: false,
         sequenceExpression: false,
         stringPool: false,
         controlFlowFlattening: false,
         deadCode: false,
+      },
+      antiDebug: {
+        nativeBinding: false,
+        integrityTag: false,
       },
     });
 

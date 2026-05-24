@@ -1,5 +1,6 @@
 import * as t from "@babel/types";
 import type { NativeBindingOptions } from "../types";
+import { genId } from "../genId";
 
 /** Default set of native methods to pre-bind */
 const DEFAULT_METHODS = [
@@ -31,7 +32,7 @@ export function applyNativeBinding(ast: t.File, options: NativeBindingOptions = 
     const parts = methodPath.split(".");
     // receiver is the object before the last segment (e.g. Math for Math.floor)
     const receiverPath = parts.slice(0, -1).join(".");
-    const constName = `__obscura_${parts.join("_")}`;
+    const constName = genId();
 
     // Build member expression: Math.floor
     const memberExpr = parts.reduce<t.Expression>(
