@@ -141,7 +141,7 @@ const program = new Command();
 program
   .name("obscura-js")
   .description("JavaScript code protection tool — obfuscation & anti-debugging")
-  .version("1.0.0");
+  .version("1.2.0");
 
 program
   .command("protect <input>")

@@ -1,6 +1,7 @@
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import type { IntegrityTagOptions } from "../types";
+import { genId } from "../genId";
 
 /**
  * Pass: Symbol-based Integrity Tag
@@ -25,8 +26,8 @@ export function applyIntegrityTag(ast: t.File, options: IntegrityTagOptions = {}
     .toString(36)
     .slice(0, 6);
   const description = options.tagDescription ?? defaultDesc;
-  const symVar = "__obscura_sym";
-  const tagFn = "__obscura_tag";
+  const symVar = genId();
+  const tagFn = genId();
 
   // Randomized mixing constants for checksum computation
   const K1 = (Math.floor(Math.random() * 0xffff) | 1) >>> 0; // odd, non-zero

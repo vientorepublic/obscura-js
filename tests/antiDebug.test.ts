@@ -14,10 +14,11 @@ function parseAndApply(source: string, fn: (ast: ParseResult) => void): string {
 // ─── integrityTag ─────────────────────────────────────────────────────────────
 
 describe("integrityTag", () => {
-  it("wraps array literals with __obscura_tag", () => {
+  it("wraps array literals with integrity tag helper", () => {
     const code = parseAndApply("const a = [1, 2, 3];", (ast) => applyIntegrityTag(ast));
-    expect(code).toContain("__obscura_tag");
-    expect(code).toContain("__obscura_sym");
+    // A hex-named function call must wrap the array, and Symbol must be created
+    expect(code).toMatch(/_0x[0-9a-f]{8}\(\[/);
+    expect(code).toContain("Symbol(");
   });
 
   it("injects Symbol declaration and helper function", () => {
@@ -37,21 +38,20 @@ describe("integrityTag", () => {
 
   it("wraps an empty array with a numeric checksum", () => {
     const code = parseAndApply("const a = [];", (ast) => applyIntegrityTag(ast));
-    // Checksum is a randomized mix — just verify a number argument is present
-    expect(code).toMatch(/__obscura_tag\(\[\],\s*\d+\)/);
+    expect(code).toMatch(/_0x[0-9a-f]{8}\(\[\],\s*\d+\)/);
   });
 
   it("tags multiple arrays in the same source independently", () => {
     const code = parseAndApply("const a = [1]; const b = [2, 3];", (ast) => applyIntegrityTag(ast));
-    // At least one __obscura_tag call per user array; the injected helper may add more
-    const tagCalls = [...code.matchAll(/__obscura_tag\(/g)];
+    // At least one hex-named call per user array
+    const tagCalls = [...code.matchAll(/_0x[0-9a-f]{8}\(/g)];
     expect(tagCalls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("does not inject helpers when there are no array literals", () => {
     const code = parseAndApply("const x = 1;", (ast) => applyIntegrityTag(ast));
-    expect(code).not.toContain("__obscura_tag");
-    expect(code).not.toContain("__obscura_sym");
+    // Nothing injected — no hex-named identifiers at all
+    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
   });
 
   it("output remains parseable after transformation", () => {
@@ -82,22 +82,23 @@ describe("nativeBinding", () => {
     const code = parseAndApply("const x = 1;", (ast) =>
       applyNativeBinding(ast, { methods: ["Math.floor"] })
     );
-    expect(code).toContain("__obscura_Math_floor");
+    // Identifier is randomised — verify the binding expression is correct
+    expect(code).toMatch(/const _0x[0-9a-f]{8}/);
     expect(code).toContain("Math.floor.bind(Math)");
   });
 
   it("prepends all default methods when no options are given", () => {
     const code = parseAndApply("const x = 1;", (ast) => applyNativeBinding(ast));
-    expect(code).toContain("__obscura_Math_floor");
-    expect(code).toContain("__obscura_Math_random");
-    expect(code).toContain("__obscura_Object_defineProperty");
+    // Verify binding expressions for several default methods
+    expect(code).toContain("Math.floor.bind(Math)");
+    expect(code).toContain("Math.random.bind(Math)");
+    expect(code).toContain("Object.defineProperty.bind(Object)");
   });
 
   it("handles multi-segment paths like Array.prototype.slice", () => {
     const code = parseAndApply("const x = 1;", (ast) =>
       applyNativeBinding(ast, { methods: ["Array.prototype.slice"] })
     );
-    expect(code).toContain("__obscura_Array_prototype_slice");
     expect(code).toContain("Array.prototype.slice.bind(Array.prototype)");
   });
 
@@ -108,11 +109,11 @@ describe("nativeBinding", () => {
     expect(ast.program.body.length).toBe(before);
   });
 
-  it("bound constants are const declarations", () => {
+  it("bound constants are const declarations with random hex names", () => {
     const code = parseAndApply("const x = 1;", (ast) =>
       applyNativeBinding(ast, { methods: ["Math.ceil"] })
     );
-    expect(code).toMatch(/const __obscura_Math_ceil/);
+    expect(code).toMatch(/const _0x[0-9a-f]{8}/);
   });
 
   it("output remains parseable after transformation", () => {

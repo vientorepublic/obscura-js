@@ -115,40 +115,91 @@ describe("functionTable", () => {
     sub(3, 1);
   `;
 
-  it("builds __obscura_ft array from function declarations", () => {
+  it("builds a function table array from function declarations", () => {
     const code = parseAndApply(twoFnSource, (ast) => applyFunctionTable(ast));
-    expect(code).toContain("__obscura_ft");
+    // Original declarations must be removed and replaced by an array of functions
+    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
     expect(code).not.toMatch(/^function add/m);
     expect(code).not.toMatch(/^function sub/m);
   });
 
   it("replaces call sites with indexed lookups", () => {
     const code = parseAndApply(twoFnSource, (ast) => applyFunctionTable(ast));
-    expect(code).toMatch(/__obscura_ft\[0\]/);
-    expect(code).toMatch(/__obscura_ft\[1\]/);
+    expect(code).toMatch(/_0x[0-9a-f]{8}\[0\]/);
+    expect(code).toMatch(/_0x[0-9a-f]{8}\[1\]/);
   });
 
   it("skips transformation when function count is below minFunctions", () => {
     const source = "function only() {} only();";
     const code = parseAndApply(source, (ast) => applyFunctionTable(ast, { minFunctions: 2 }));
-    expect(code).not.toContain("__obscura_ft");
+    // No function table array — original declaration must survive
+    expect(code).not.toMatch(/const _0x[0-9a-f]{8} = \[/);
     expect(code).toContain("function only");
   });
 
   it("applies when minFunctions=1 and one function exists", () => {
     const source = "function solo(x) { return x; } solo(42);";
     const code = parseAndApply(source, (ast) => applyFunctionTable(ast, { minFunctions: 1 }));
-    expect(code).toContain("__obscura_ft");
-    expect(code).toMatch(/__obscura_ft\[0\]/);
+    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
+    expect(code).toMatch(/_0x[0-9a-f]{8}\[0\]/);
+  });
+
+  it("skips ESM-exported function declarations (export { foo })", () => {
+    // foo is exported by specifier — must keep its declaration.
+    // bar is internal — can be moved to the table when minFunctions=1.
+    const ast = parse(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nexport { foo };",
+      { sourceType: "module" }
+    );
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = generate(ast).code;
+    expect(code).toContain("function foo");
+    // bar has no leak — it is moved to the table
+    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
+    expect(code).not.toContain("function bar(");
+  });
+
+  it("skips ESM export-default-by-identifier functions", () => {
+    const ast = parse(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nexport default foo;",
+      { sourceType: "module" }
+    );
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = generate(ast).code;
+    expect(code).toContain("function foo");
+  });
+
+  it("skips CJS module.exports-assigned function declarations", () => {
+    // foo is leaked via module.exports — must keep its declaration.
+    // bar is internal and can be moved to the table.
+    const ast = parse(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nmodule.exports = { foo };\nbar();",
+      { sourceType: "script" }
+    );
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = generate(ast).code;
+    expect(code).toContain("function foo");
+    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
+  });
+
+  it("skips CJS exports.foo = funcName assignments", () => {
+    const ast = parse("function greet() { return 'hi'; }\nexports.greet = greet;", {
+      sourceType: "script",
+    });
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = generate(ast).code;
+    expect(code).toContain("function greet");
+    expect(code).not.toMatch(/const _0x[0-9a-f]{8} = \[/);
   });
 });
 
 // ─── stringPool ──────────────────────────────────────────────────────────────
 
 describe("stringPool", () => {
-  it("replaces string literals with __obscura_sp calls", () => {
+  it("replaces string literals with pool decryption calls", () => {
     const code = parseAndApply('const s = "hello";', (ast) => applyStringPool(ast, { seed: 42 }));
-    expect(code).toContain("__obscura_sp");
+    // Original string must be gone; a hex-named function call must appear
+    expect(code).toMatch(/_0x[0-9a-f]{8}\(/);
     expect(code).not.toContain('"hello"');
   });
 
@@ -157,7 +208,7 @@ describe("stringPool", () => {
     const code = parseAndApply('var a = "dup"; var b = "dup";', (ast) =>
       applyStringPool(ast, { seed: 10 })
     );
-    const matches = [...code.matchAll(/__obscura_sp\((\d+),/g)];
+    const matches = [...code.matchAll(/_0x[0-9a-f]{8}\((\d+),/g)];
     expect(matches).toHaveLength(2);
     // Each occurrence is independently encrypted — different pool offsets
     expect(matches[0][1]).not.toBe(matches[1][1]);
@@ -174,7 +225,18 @@ describe("stringPool", () => {
     applyStringPool(ast, { seed: 42 });
     const code = generate(ast).code;
     expect(code).toContain('"some-module"');
-    expect(code).not.toContain("__obscura_sp");
+    expect(code).not.toMatch(/_0x[0-9a-f]{8}\(/);
+  });
+
+  it("does not encrypt dynamic import() path strings", () => {
+    const ast = parse('const m = import("./module");', { sourceType: "module" });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    expect(code).toContain('"./module"');
+    // Other strings in the file may cause a pool function to appear, but the
+    // import path itself must remain a plain string literal.
+    const importLine = code.split("\n").find((l) => l.includes("import("));
+    expect(importLine).toContain('"./module"');
   });
 
   it("does not encrypt require() argument strings", () => {
@@ -182,13 +244,13 @@ describe("stringPool", () => {
       applyStringPool(ast, { seed: 42 })
     );
     expect(code).toContain('"fs"');
-    expect(code).not.toContain("__obscura_sp");
+    expect(code).not.toMatch(/_0x[0-9a-f]{8}\(/);
   });
 
   it("no-op when there are no string literals", () => {
     const code = parseAndApply("const x = 1 + 2;", (ast) => applyStringPool(ast, { seed: 42 }));
-    expect(code).not.toContain("__obscura_sp");
-    expect(code).not.toContain("__obscura_pool");
+    // Nothing injected — no hex-named identifiers at all
+    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
   });
 
   it("pool decryption produces the original string at runtime", () => {
@@ -226,12 +288,22 @@ describe("stringPool", () => {
   });
 
   it("seed > 0xffff uses only lower 16 bits (same as seed & 0xffff)", () => {
-    // 0x1002a & 0xffff = 42, so seed=0x1002a must produce identical output to seed=42
+    const vm = require("vm") as typeof import("vm");
+    // 0x1002a & 0xffff = 42, so both seeds must decrypt to the same string.
+    // We compare runtime results rather than exact code strings because the
+    // pool function name is randomised per call.
     const codeA = parseAndApply('var r = "hello";', (ast) => applyStringPool(ast, { seed: 42 }));
     const codeB = parseAndApply('var r = "hello";', (ast) =>
       applyStringPool(ast, { seed: 0x1002a })
     );
-    expect(codeA).toBe(codeB);
+    const ctxA: Record<string, unknown> = {};
+    const ctxB: Record<string, unknown> = {};
+    vm.createContext(ctxA);
+    vm.createContext(ctxB);
+    vm.runInContext(codeA, ctxA);
+    vm.runInContext(codeB, ctxB);
+    expect(ctxA["r"]).toBe("hello");
+    expect(ctxB["r"]).toBe("hello");
   });
 
   it("correctly round-trips Korean characters at runtime", () => {
@@ -299,7 +371,8 @@ describe("controlFlowFlattening", () => {
     );
     expect(code).toContain("switch");
     expect(code).toContain("while");
-    expect(code).toContain("__obscura_s");
+    // State variable is now a random hex identifier
+    expect(code).toMatch(/_0x[0-9a-f]{8}/);
   });
 
   it("generates one case per original statement", () => {

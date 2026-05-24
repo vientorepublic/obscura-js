@@ -6,6 +6,7 @@
 
 A JavaScript code protection library inspired by the obfuscation and anti-debugging techniques used in Google reCAPTCHA.
 
+[![CI](https://github.com/vientorepublic/obscura-js/actions/workflows/ci.yml/badge.svg)](https://github.com/vientorepublic/obscura-js/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/obscura-js)](https://www.npmjs.com/package/obscura-js)
 [![license](https://img.shields.io/npm/l/obscura-js)](LICENSE)
 [![node](https://img.shields.io/node/v/obscura-js)](package.json)
@@ -67,9 +68,9 @@ console.log(appliedPasses);
 
 ### `protect(source, options?)`
 
-| Parameter | Type          | Description                       |
-| --------- | ------------- | --------------------------------- |
-| `source`  | `string`      | JavaScript source code to protect |
+| Parameter | Type             | Description                       |
+| --------- | ---------------- | --------------------------------- |
+| `source`  | `string`         | JavaScript source code to protect |
 | `options` | `ObscuraOptions` | Optional configuration            |
 
 Returns `ProtectResult`:

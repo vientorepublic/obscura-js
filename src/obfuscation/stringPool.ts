@@ -1,9 +1,7 @@
 import traverse, { type NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import type { StringPoolOptions } from "../types";
-
-const POOL_FN = "__obscura_sp";
-const POOL_VAR = "__obscura_pool";
+import { genId } from "../genId";
 
 /**
  * XOR-based LCG string encryption matching reCAPTCHA's encrypted string pool.
@@ -47,6 +45,10 @@ function isRequireLikeCall(node: t.Node): boolean {
  * After:   __obscura_sp(0, 4, <seed>)
  */
 export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): void {
+  // Per-call random identifiers — indistinguishable from dead-code variables.
+  const POOL_FN = genId();
+  const POOL_VAR = genId();
+
   // Normalize to 1..0xffff — the effective XOR key must never be zero,
   // and seeds above 0xffff carry no extra entropy (only lower 16 bits matter).
   const masterSeed =
@@ -68,6 +70,8 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
       // Skip import/export specifiers and all require-family calls
       if (
         t.isImportDeclaration(path.parent) ||
+        // dynamic import('./path') — parsed as CallExpression { callee: Import }
+        (t.isCallExpression(path.parent) && t.isImport(path.parent.callee)) ||
         t.isExportDeclaration(path.parent) ||
         isRequireLikeCall(path.parent)
       ) {
@@ -106,16 +110,7 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
     ),
   ]);
 
-  // Decryption function:
-  // function __obscura_sp(start, len, seed) {
-  //   let key = seed, out = '';
-  //   for (let i = 0; i < len; i++) {
-  //     const b = (__obscura_pool[start + i] ^ key) & 0xffff;
-  //     out += String.fromCharCode(b);
-  //     key = (key + pool[start+i]) & 0xffff;
-  //   }
-  //   return out;
-  // }
+  // Decryption function (name is randomised per call):
   const decryptFn = t.functionDeclaration(
     t.identifier(POOL_FN),
     [t.identifier("start"), t.identifier("len"), t.identifier("seed")],
