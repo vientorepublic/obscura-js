@@ -1,0 +1,64 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for obscura-js
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an improvement to obscura-js!
+        Please provide as much detail as possible.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: Which area does this feature relate to?
+      options:
+        - Obfuscation (new technique)
+        - Anti-Debug (new protection)
+        - CLI (command-line interface)
+        - API (programmatic usage)
+        - Performance
+        - Configuration / Options
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem? Describe it.
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution or feature you'd like to see.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or features you've considered?
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example Usage
+      description: |
+        Show how this feature would be used (API call, CLI flag, config option, etc.)
+      render: javascript
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, references, or links relevant to this request.
