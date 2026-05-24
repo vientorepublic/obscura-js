@@ -70,6 +70,8 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
       // Skip import/export specifiers and all require-family calls
       if (
         t.isImportDeclaration(path.parent) ||
+        // dynamic import('./path') — parsed as CallExpression { callee: Import }
+        (t.isCallExpression(path.parent) && t.isImport(path.parent.callee)) ||
         t.isExportDeclaration(path.parent) ||
         isRequireLikeCall(path.parent)
       ) {

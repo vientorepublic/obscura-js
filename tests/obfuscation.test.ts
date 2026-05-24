@@ -143,6 +143,54 @@ describe("functionTable", () => {
     expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
     expect(code).toMatch(/_0x[0-9a-f]{8}\[0\]/);
   });
+
+  it("skips ESM-exported function declarations (export { foo })", () => {
+    // foo is exported by specifier — must keep its declaration.
+    // bar is internal — can be moved to the table when minFunctions=1.
+    const ast = parse(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nexport { foo };",
+      { sourceType: "module" }
+    );
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = generate(ast).code;
+    expect(code).toContain("function foo");
+    // bar has no leak — it is moved to the table
+    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
+    expect(code).not.toContain("function bar(");
+  });
+
+  it("skips ESM export-default-by-identifier functions", () => {
+    const ast = parse(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nexport default foo;",
+      { sourceType: "module" }
+    );
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = generate(ast).code;
+    expect(code).toContain("function foo");
+  });
+
+  it("skips CJS module.exports-assigned function declarations", () => {
+    // foo is leaked via module.exports — must keep its declaration.
+    // bar is internal and can be moved to the table.
+    const ast = parse(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nmodule.exports = { foo };\nbar();",
+      { sourceType: "script" }
+    );
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = generate(ast).code;
+    expect(code).toContain("function foo");
+    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
+  });
+
+  it("skips CJS exports.foo = funcName assignments", () => {
+    const ast = parse("function greet() { return 'hi'; }\nexports.greet = greet;", {
+      sourceType: "script",
+    });
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = generate(ast).code;
+    expect(code).toContain("function greet");
+    expect(code).not.toMatch(/const _0x[0-9a-f]{8} = \[/);
+  });
 });
 
 // ─── stringPool ──────────────────────────────────────────────────────────────
@@ -178,6 +226,17 @@ describe("stringPool", () => {
     const code = generate(ast).code;
     expect(code).toContain('"some-module"');
     expect(code).not.toMatch(/_0x[0-9a-f]{8}\(/);
+  });
+
+  it("does not encrypt dynamic import() path strings", () => {
+    const ast = parse('const m = import("./module");', { sourceType: "module" });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    expect(code).toContain('"./module"');
+    // Other strings in the file may cause a pool function to appear, but the
+    // import path itself must remain a plain string literal.
+    const importLine = code.split("\n").find((l) => l.includes("import("));
+    expect(importLine).toContain('"./module"');
   });
 
   it("does not encrypt require() argument strings", () => {

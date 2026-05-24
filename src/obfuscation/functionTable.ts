@@ -21,6 +21,44 @@ export function applyFunctionTable(ast: t.File, options: FunctionTableOptions = 
   const minFunctions = options.minFunctions ?? 2;
   const tableId = genId();
 
+  // ── Step 1: collect names that "leak" out of this module ──────────────────
+  // Removing the declaration of a leaked function would silently break callers
+  // outside the module (ESM consumers) or property accesses (CJS consumers).
+  const leakedNames = new Set<string>();
+
+  traverse(ast, {
+    // ESM: export { foo }, export { foo as bar }
+    ExportNamedDeclaration(path) {
+      if (path.node.source) return; // re-export from another file — no local binding
+      for (const spec of path.node.specifiers) {
+        if (t.isExportSpecifier(spec) && t.isIdentifier(spec.local)) {
+          leakedNames.add(spec.local.name);
+        }
+      }
+    },
+    // ESM: export default foo  (identifier, not an inline declaration)
+    ExportDefaultDeclaration(path) {
+      if (t.isIdentifier(path.node.declaration)) {
+        leakedNames.add((path.node.declaration as t.Identifier).name);
+      }
+    },
+    // CJS: module.exports = foo | module.exports.x = foo | exports.x = foo
+    //       module.exports = { foo } | module.exports = { x: foo }
+    AssignmentExpression(path) {
+      const { left, right } = path.node;
+      if (!isExportsTarget(left)) return;
+      if (t.isIdentifier(right)) {
+        leakedNames.add(right.name);
+      } else if (t.isObjectExpression(right)) {
+        for (const prop of right.properties) {
+          if (t.isObjectProperty(prop) && t.isIdentifier(prop.value)) {
+            leakedNames.add((prop.value as t.Identifier).name);
+          }
+        }
+      }
+    },
+  });
+
   // Collect top-level named function declarations first, then remove only if threshold is met
   const functions: { id: string; fn: t.FunctionExpression }[] = [];
   const nameToIndex = new Map<string, number>();
@@ -30,6 +68,7 @@ export function applyFunctionTable(ast: t.File, options: FunctionTableOptions = 
     FunctionDeclaration(path) {
       if (!path.node.id) return;
       if (!t.isProgram(path.parent) && !t.isBlockStatement(path.parent)) return;
+      if (leakedNames.has(path.node.id.name)) return; // preserve exported/leaked functions
       functionPaths.push(path);
     },
   });
@@ -78,4 +117,31 @@ export function applyFunctionTable(ast: t.File, options: FunctionTableOptions = 
   ]);
 
   (ast.program.body as t.Statement[]).unshift(tableDeclaration);
+}
+
+/**
+ * Returns true if `node` is an assignment target that exposes a value as a
+ * CJS export: `exports`, `module.exports`, or any member of `module.exports`.
+ */
+function isExportsTarget(node: t.LVal | t.Expression): boolean {
+  // bare `exports`
+  if (t.isIdentifier(node, { name: "exports" })) return true;
+  if (!t.isMemberExpression(node) || node.computed) return false;
+  // `exports.foo`
+  if (t.isIdentifier(node.object, { name: "exports" })) return true;
+  // `module.exports`
+  if (
+    t.isIdentifier(node.object, { name: "module" }) &&
+    t.isIdentifier(node.property, { name: "exports" })
+  )
+    return true;
+  // `module.exports.foo`
+  if (
+    t.isMemberExpression(node.object) &&
+    !node.object.computed &&
+    t.isIdentifier(node.object.object, { name: "module" }) &&
+    t.isIdentifier(node.object.property, { name: "exports" })
+  )
+    return true;
+  return false;
 }
