@@ -152,14 +152,21 @@ describe("stringPool", () => {
     expect(code).not.toContain('"hello"');
   });
 
-  it("deduplicates: identical strings share the same pool entry", () => {
-    const code = parseAndApply('const a = "dup"; const b = "dup";', (ast) =>
+  it("identical strings at different sites get distinct pool entries", () => {
+    const vm = require("vm") as typeof import("vm");
+    const code = parseAndApply('var a = "dup"; var b = "dup";', (ast) =>
       applyStringPool(ast, { seed: 10 })
     );
-    // Both calls should reference the same start offset (0)
     const matches = [...code.matchAll(/__obscura_sp\((\d+),/g)];
     expect(matches).toHaveLength(2);
-    expect(matches[0][1]).toBe(matches[1][1]); // same start offset
+    // Each occurrence is independently encrypted — different pool offsets
+    expect(matches[0][1]).not.toBe(matches[1][1]);
+    // Both must still decrypt to the same original string at runtime
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["a"]).toBe("dup");
+    expect(ctx["b"]).toBe("dup");
   });
 
   it("does not encrypt import path strings", () => {
@@ -186,13 +193,100 @@ describe("stringPool", () => {
 
   it("pool decryption produces the original string at runtime", () => {
     const vm = require("vm") as typeof import("vm");
-    // globalThis inside a vm context IS the sandbox object itself
     const source = 'var __result = "haze";';
     const code = parseAndApply(source, (ast) => applyStringPool(ast, { seed: 99 }));
     const ctx: Record<string, unknown> = {};
     vm.createContext(ctx);
     vm.runInContext(code, ctx);
     expect(ctx["__result"]).toBe("haze");
+  });
+
+  // ─── boundary conditions ─────────────────────────────────────────────────
+
+  it("seed = 0 normalizes to 1 and decrypts correctly", () => {
+    const vm = require("vm") as typeof import("vm");
+    const code = parseAndApply('var r = "norm";', (ast) => applyStringPool(ast, { seed: 0 }));
+    expect(code).not.toContain('"norm"');
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe("norm");
+  });
+
+  it("seed = 0x10000 (low 16 bits are zero) normalizes to 1 and decrypts correctly", () => {
+    const vm = require("vm") as typeof import("vm");
+    const code = parseAndApply('var r = "overflow";', (ast) =>
+      applyStringPool(ast, { seed: 0x10000 })
+    );
+    expect(code).not.toContain('"overflow"');
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe("overflow");
+  });
+
+  it("seed > 0xffff uses only lower 16 bits (same as seed & 0xffff)", () => {
+    // 0x1002a & 0xffff = 42, so seed=0x1002a must produce identical output to seed=42
+    const codeA = parseAndApply('var r = "hello";', (ast) => applyStringPool(ast, { seed: 42 }));
+    const codeB = parseAndApply('var r = "hello";', (ast) =>
+      applyStringPool(ast, { seed: 0x1002a })
+    );
+    expect(codeA).toBe(codeB);
+  });
+
+  it("correctly round-trips Korean characters at runtime", () => {
+    const vm = require("vm") as typeof import("vm");
+    const code = parseAndApply('var r = "안녕하세요";', (ast) =>
+      applyStringPool(ast, { seed: 42 })
+    );
+    expect(code).not.toContain('"안녕하세요"');
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe("안녕하세요");
+  });
+
+  it("correctly round-trips emoji (SMP surrogate pairs) at runtime", () => {
+    const vm = require("vm") as typeof import("vm");
+    const code = parseAndApply('var r = "Hello \uD83D\uDE00\uD83C\uDF89";', (ast) =>
+      applyStringPool(ast, { seed: 77 })
+    );
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe("Hello \uD83D\uDE00\uD83C\uDF89");
+  });
+
+  it("correctly round-trips empty string", () => {
+    const vm = require("vm") as typeof import("vm");
+    const code = parseAndApply('var r = "";', (ast) => applyStringPool(ast, { seed: 1 }));
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe("");
+  });
+
+  it("does not encrypt require.resolve() argument strings", () => {
+    const code = parseAndApply('var p = require.resolve("./config");', (ast) =>
+      applyStringPool(ast, { seed: 42 })
+    );
+    expect(code).toContain('"./config"');
+    expect(code).not.toContain("__obscura_sp");
+  });
+
+  it("all pool values are in the 0..0xffff range", () => {
+    const code = parseAndApply('var a = "hello"; var b = "안녕";', (ast) =>
+      applyStringPool(ast, { seed: 42 })
+    );
+    // __obscura_pool is always the second statement (after the decrypt fn)
+    const poolAst = parse(code, { sourceType: "script" });
+    const poolDecl = poolAst.program.body[1] as any;
+    const elements: Array<{ value: number }> = poolDecl.declarations[0].init.elements;
+    expect(elements.length).toBeGreaterThan(0);
+    for (const el of elements) {
+      expect(el.value).toBeGreaterThanOrEqual(0);
+      expect(el.value).toBeLessThanOrEqual(0xffff);
+    }
   });
 });
 
