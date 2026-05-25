@@ -1,4 +1,5 @@
-import * as t from "@babel/types";
+import { t } from "../swc-utils";
+import type { SwcProgram } from "../swc-utils";
 import type { NativeBindingOptions } from "../types";
 import { genId } from "../genId";
 
@@ -25,33 +26,28 @@ const DEFAULT_METHODS = [
  *   const __obscura_Math_floor = Math.floor.bind(Math);
  *   const __obscura_Math_random = Math.random.bind(Math);
  */
-export function applyNativeBinding(ast: t.File, options: NativeBindingOptions = {}): void {
+export function applyNativeBinding(ast: SwcProgram, options: NativeBindingOptions = {}): void {
   const methods = options.methods ?? DEFAULT_METHODS;
 
-  const declarations: t.VariableDeclaration[] = methods.map((methodPath) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const declarations: any[] = methods.map((methodPath) => {
     const parts = methodPath.split(".");
     // receiver is the object before the last segment (e.g. Math for Math.floor)
     const receiverPath = parts.slice(0, -1).join(".");
     const constName = genId();
 
     // Build member expression: Math.floor
-    const memberExpr = parts.reduce<t.Expression>(
-      (acc, part) => t.memberExpression(acc, t.identifier(part)),
-      t.identifier(parts[0])
-    );
-    // Actually rebuild correctly:
-    let obj: t.Expression = t.identifier(parts[0]);
+    let obj: any = t.identifier(parts[0]); // eslint-disable-line @typescript-eslint/no-explicit-any
     for (let i = 1; i < parts.length; i++) {
       obj = t.memberExpression(obj, t.identifier(parts[i]));
     }
 
     // receiver expression (e.g. Math, Array.prototype)
-    let receiver: t.Expression = t.identifier(parts[0]);
+    let receiver: any = t.identifier(parts[0]); // eslint-disable-line @typescript-eslint/no-explicit-any
     for (let i = 1; i < parts.length - 1; i++) {
       receiver = t.memberExpression(receiver, t.identifier(parts[i]));
     }
 
-    void memberExpr; // suppress unused warning — we use `obj` instead
     void receiverPath;
 
     // <method>.bind(<receiver>)
@@ -62,5 +58,5 @@ export function applyNativeBinding(ast: t.File, options: NativeBindingOptions = 
     ]);
   });
 
-  (ast.program.body as t.Statement[]).unshift(...declarations);
+  (ast.body as any[]).unshift(...declarations); // eslint-disable-line @typescript-eslint/no-explicit-any
 }

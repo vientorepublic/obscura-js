@@ -1,4 +1,4 @@
-import type * as t from "@babel/types";
+import type { SwcProgram } from "../swc-utils";
 import type { AntiDebugOptions } from "../types";
 import { applyIntegrityTag } from "./integrityTag";
 import { applyNativeBinding } from "./nativeBinding";
@@ -10,7 +10,7 @@ export { applyIntegrityTag, applyNativeBinding };
  * Each pass is opt-in: pass `false` to skip it.
  */
 export function applyAntiDebug(
-  ast: t.File,
+  ast: SwcProgram,
   options: AntiDebugOptions = {},
   appliedPasses: string[]
 ): void {

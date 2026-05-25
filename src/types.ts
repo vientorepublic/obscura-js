@@ -1,4 +1,4 @@
-import * as t from "@babel/types";
+import type { SwcProgram } from "./swc-utils";
 
 // ─── Shared pass interface ──────────────────────────────────────────────────
 
@@ -7,7 +7,7 @@ export interface Pass<TOptions> {
   /** Human-readable name of the pass */
   readonly name: string;
   /** Apply the pass to the given AST node in-place */
-  apply(ast: t.File, options?: TOptions): void;
+  apply(ast: SwcProgram, options?: TOptions): void;
 }
 
 // ─── Obfuscation options ────────────────────────────────────────────────────

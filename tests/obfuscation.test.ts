@@ -1,5 +1,7 @@
-import { parse } from "@babel/parser";
-import generate from "@babel/generator";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { parseSync, printSync } from "@swc/core";
+import * as vm from "vm";
+import type { SwcProgram } from "../src/swc-utils";
 import { applySequenceExpression } from "../src/obfuscation/sequenceExpression";
 import { applyMba } from "../src/obfuscation/mba";
 import { applyFunctionTable } from "../src/obfuscation/functionTable";
@@ -7,16 +9,17 @@ import { applyStringPool } from "../src/obfuscation/stringPool";
 import { applyControlFlowFlattening } from "../src/obfuscation/cff";
 import { applyDeadCode } from "../src/obfuscation/deadCode";
 
-type ParseResult = ReturnType<typeof parse>;
-
-function parseAndApply(source: string, fn: (ast: ParseResult) => void): string {
-  const ast = parse(source, { sourceType: "script" });
+function parseAndApply(source: string, fn: (ast: SwcProgram) => void, jsx = false): string {
+  const ast = parseSync(source, { syntax: "ecmascript", jsx }) as unknown as SwcProgram;
   fn(ast);
-  return generate(ast).code;
+  return printSync(ast as any).code;
 }
 
-function parseAst(source: string): ParseResult {
-  return parse(source, { sourceType: "script" });
+function parseAst(source: string, module = false): SwcProgram {
+  return parseSync(source, {
+    syntax: "ecmascript",
+    ...(module ? { target: "es2022" } : {}),
+  }) as unknown as SwcProgram;
 }
 
 // ─── sequenceExpression ──────────────────────────────────────────────────────
@@ -155,88 +158,87 @@ describe("functionTable", () => {
   it("builds a function table array from function declarations", () => {
     const code = parseAndApply(twoFnSource, (ast) => applyFunctionTable(ast));
     // Original declarations must be removed and replaced by an array of functions
-    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
+    expect(code).toMatch(/const _0x[0-9a-fасе]{16} = \[/);
     expect(code).not.toMatch(/^function add/m);
     expect(code).not.toMatch(/^function sub/m);
   });
 
   it("replaces call sites with indexed lookups", () => {
     const code = parseAndApply(twoFnSource, (ast) => applyFunctionTable(ast));
-    expect(code).toMatch(/_0x[0-9a-f]{8}\[0\]/);
-    expect(code).toMatch(/_0x[0-9a-f]{8}\[1\]/);
+    expect(code).toMatch(/_0x[0-9a-fасе]{16}\[0\]/);
+    expect(code).toMatch(/_0x[0-9a-fасе]{16}\[1\]/);
   });
 
   it("skips transformation when function count is below minFunctions", () => {
     const source = "function only() {} only();";
     const code = parseAndApply(source, (ast) => applyFunctionTable(ast, { minFunctions: 2 }));
     // No function table array — original declaration must survive
-    expect(code).not.toMatch(/const _0x[0-9a-f]{8} = \[/);
+    expect(code).not.toMatch(/const _0x[0-9a-fасе]{16} = \[/);
     expect(code).toContain("function only");
   });
 
   it("applies when minFunctions=1 and one function exists", () => {
     const source = "function solo(x) { return x; } solo(42);";
     const code = parseAndApply(source, (ast) => applyFunctionTable(ast, { minFunctions: 1 }));
-    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
-    expect(code).toMatch(/_0x[0-9a-f]{8}\[0\]/);
+    expect(code).toMatch(/const _0x[0-9a-fасе]{16} = \[/);
+    expect(code).toMatch(/_0x[0-9a-fасе]{16}\[0\]/);
   });
 
   it("skips ESM-exported function declarations (export { foo })", () => {
     // foo is exported by specifier — must keep its declaration.
     // bar is internal — can be moved to the table when minFunctions=1.
-    const ast = parse(
+    const ast = parseSync(
       "function foo() { return 1; }\nfunction bar() { return 2; }\nexport { foo };",
-      { sourceType: "module" }
-    );
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
     applyFunctionTable(ast, { minFunctions: 1 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).toContain("function foo");
     // bar has no leak — it is moved to the table
-    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
+    expect(code).toMatch(/const _0x[0-9a-fасе]{16} = \[/);
     expect(code).not.toContain("function bar(");
   });
 
   it("skips ESM export-default-by-identifier functions", () => {
-    const ast = parse(
+    const ast = parseSync(
       "function foo() { return 1; }\nfunction bar() { return 2; }\nexport default foo;",
-      { sourceType: "module" }
-    );
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
     applyFunctionTable(ast, { minFunctions: 1 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).toContain("function foo");
   });
 
   it("skips CJS module.exports-assigned function declarations", () => {
     // foo is leaked via module.exports — must keep its declaration.
     // bar is internal and can be moved to the table.
-    const ast = parse(
+    const ast = parseSync(
       "function foo() { return 1; }\nfunction bar() { return 2; }\nmodule.exports = { foo };\nbar();",
-      { sourceType: "script" }
-    );
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
     applyFunctionTable(ast, { minFunctions: 1 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).toContain("function foo");
-    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/);
+    expect(code).toMatch(/const _0x[0-9a-fасе]{16} = \[/);
   });
 
   it("skips CJS exports.foo = funcName assignments", () => {
-    const ast = parse("function greet() { return 'hi'; }\nexports.greet = greet;", {
-      sourceType: "script",
-    });
+    const ast = parseSync("function greet() { return 'hi'; }\nexports.greet = greet;", {
+      syntax: "ecmascript",
+    }) as unknown as SwcProgram;
     applyFunctionTable(ast, { minFunctions: 1 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).toContain("function greet");
-    expect(code).not.toMatch(/const _0x[0-9a-f]{8} = \[/);
+    expect(code).not.toMatch(/const _0x[0-9a-fасе]{16} = \[/);
   });
 
   it("rewrites self-recursive call sites inside the function body", () => {
-    const vm = require("vm") as typeof import("vm");
-    const ast = parse(
+    const ast = parseSync(
       "function fact(n) { return n <= 1 ? 1 : n * fact(n - 1); }\nvar r = fact(5);",
-      { sourceType: "script" }
-    );
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
     applyFunctionTable(ast, { minFunctions: 1 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     // Internal recursive call fact(n-1) must also be rewritten to a table lookup
     expect(code).not.toContain("fact(");
     const ctx: Record<string, unknown> = {};
@@ -246,14 +248,14 @@ describe("functionTable", () => {
   });
 
   it("skips CJS module.exports = funcName (direct identifier assignment)", () => {
-    const ast = parse(
+    const ast = parseSync(
       "function foo() { return 1; }\nfunction bar() { return 2; }\nmodule.exports = foo;\nbar();",
-      { sourceType: "script" }
-    );
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
     applyFunctionTable(ast, { minFunctions: 1 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).toContain("function foo");
-    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/); // bar gets tabled
+    expect(code).toMatch(/const _0x[0-9a-fасе]{16} = \[/); // bar gets tabled
   });
 });
 
@@ -263,16 +265,15 @@ describe("stringPool", () => {
   it("replaces string literals with pool decryption calls", () => {
     const code = parseAndApply('const s = "hello";', (ast) => applyStringPool(ast, { seed: 42 }));
     // Original string must be gone; a hex-named function call must appear
-    expect(code).toMatch(/_0x[0-9a-f]{8}\(/);
+    expect(code).toMatch(/_0x[0-9a-fасе]{16}\(/);
     expect(code).not.toContain('"hello"');
   });
 
   it("identical strings at different sites get distinct pool entries", () => {
-    const vm = require("vm") as typeof import("vm");
     const code = parseAndApply('var a = "dup"; var b = "dup";', (ast) =>
       applyStringPool(ast, { seed: 10 })
     );
-    const matches = [...code.matchAll(/_0x[0-9a-f]{8}\((\d+),/g)];
+    const matches = [...code.matchAll(/_0x[0-9a-fасе]{16}\((\d+),/g)];
     expect(matches).toHaveLength(2);
     // Each occurrence is independently encrypted — different pool offsets
     expect(matches[0][1]).not.toBe(matches[1][1]);
@@ -285,17 +286,21 @@ describe("stringPool", () => {
   });
 
   it("does not encrypt import path strings", () => {
-    const ast = parse('import foo from "some-module";', { sourceType: "module" });
+    const ast = parseSync('import foo from "some-module";', {
+      syntax: "ecmascript",
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).toContain('"some-module"');
-    expect(code).not.toMatch(/_0x[0-9a-f]{8}\(/);
+    expect(code).not.toMatch(/_0x[0-9a-fасе]{16}\(/);
   });
 
   it("does not encrypt dynamic import() path strings", () => {
-    const ast = parse('const m = import("./module");', { sourceType: "module" });
+    const ast = parseSync('const m = import("./module");', {
+      syntax: "ecmascript",
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).toContain('"./module"');
     // Other strings in the file may cause a pool function to appear, but the
     // import path itself must remain a plain string literal.
@@ -308,17 +313,16 @@ describe("stringPool", () => {
       applyStringPool(ast, { seed: 42 })
     );
     expect(code).toContain('"fs"');
-    expect(code).not.toMatch(/_0x[0-9a-f]{8}\(/);
+    expect(code).not.toMatch(/_0x[0-9a-fасе]{16}\(/);
   });
 
   it("no-op when there are no string literals", () => {
     const code = parseAndApply("const x = 1 + 2;", (ast) => applyStringPool(ast, { seed: 42 }));
     // Nothing injected — no hex-named identifiers at all
-    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
+    expect(code).not.toMatch(/_0x[0-9a-fасе]{16}/);
   });
 
   it("pool decryption produces the original string at runtime", () => {
-    const vm = require("vm") as typeof import("vm");
     const source = 'var __result = "haze";';
     const code = parseAndApply(source, (ast) => applyStringPool(ast, { seed: 99 }));
     const ctx: Record<string, unknown> = {};
@@ -330,7 +334,6 @@ describe("stringPool", () => {
   // ─── boundary conditions ─────────────────────────────────────────────────
 
   it("seed = 0 normalizes to 1 and decrypts correctly", () => {
-    const vm = require("vm") as typeof import("vm");
     const code = parseAndApply('var r = "norm";', (ast) => applyStringPool(ast, { seed: 0 }));
     expect(code).not.toContain('"norm"');
     const ctx: Record<string, unknown> = {};
@@ -340,7 +343,6 @@ describe("stringPool", () => {
   });
 
   it("seed = 0x10000 (low 16 bits are zero) normalizes to 1 and decrypts correctly", () => {
-    const vm = require("vm") as typeof import("vm");
     const code = parseAndApply('var r = "overflow";', (ast) =>
       applyStringPool(ast, { seed: 0x10000 })
     );
@@ -352,7 +354,6 @@ describe("stringPool", () => {
   });
 
   it("seed > 0xffff uses only lower 16 bits (same as seed & 0xffff)", () => {
-    const vm = require("vm") as typeof import("vm");
     // 0x1002a & 0xffff = 42, so both seeds must decrypt to the same string.
     // We compare runtime results rather than exact code strings because the
     // pool function name is randomised per call.
@@ -371,7 +372,6 @@ describe("stringPool", () => {
   });
 
   it("correctly round-trips Korean characters at runtime", () => {
-    const vm = require("vm") as typeof import("vm");
     const code = parseAndApply('var r = "안녕하세요";', (ast) =>
       applyStringPool(ast, { seed: 42 })
     );
@@ -383,7 +383,6 @@ describe("stringPool", () => {
   });
 
   it("correctly round-trips emoji (SMP surrogate pairs) at runtime", () => {
-    const vm = require("vm") as typeof import("vm");
     const code = parseAndApply('var r = "Hello \uD83D\uDE00\uD83C\uDF89";', (ast) =>
       applyStringPool(ast, { seed: 77 })
     );
@@ -394,7 +393,6 @@ describe("stringPool", () => {
   });
 
   it("correctly round-trips empty string", () => {
-    const vm = require("vm") as typeof import("vm");
     const code = parseAndApply('var r = "";', (ast) => applyStringPool(ast, { seed: 1 }));
     const ctx: Record<string, unknown> = {};
     vm.createContext(ctx);
@@ -415,20 +413,20 @@ describe("stringPool", () => {
       applyStringPool(ast, { seed: 42 })
     );
     // __obscura_pool is always the second statement (after the decrypt fn)
-    const poolAst = parse(code, { sourceType: "script" });
-    const poolDecl = poolAst.program.body[1] as any;
+    const poolAst = parseSync(code, { syntax: "ecmascript" }) as unknown as SwcProgram;
+    const poolDecl = (poolAst as any).body[1] as any;
     const elements: Array<{ value: number }> = poolDecl.declarations[0].init.elements;
     expect(elements.length).toBeGreaterThan(0);
     for (const el of elements) {
-      expect(el.value).toBeGreaterThanOrEqual(0);
-      expect(el.value).toBeLessThanOrEqual(0xffff);
+      const val = (el as any).expression?.value ?? (el as any).value;
+      expect(val).toBeGreaterThanOrEqual(0);
+      expect(val).toBeLessThanOrEqual(0xffff);
     }
   });
 
   // ─── boundary conditions: context-aware encryption ──────────────────────
 
   it("encrypts non-computed object property string keys (computed flipped)", () => {
-    const vm = require("vm") as typeof import("vm");
     // { 'foo': 99 } — key must be encrypted; value accessible at runtime
     const code = parseAndApply("var o = { 'foo': 99 };", (ast) =>
       applyStringPool(ast, { seed: 42 })
@@ -436,7 +434,7 @@ describe("stringPool", () => {
     expect(code).not.toContain("'foo'");
     expect(code).not.toContain('"foo"');
     // Generator must emit computed syntax [ ] around the encrypted key
-    expect(code).toMatch(/\[_0x[0-9a-f]{8}\(/);
+    expect(code).toMatch(/\[_0x[0-9a-fасе]{16}\(/);
     const ctx: Record<string, unknown> = {};
     vm.createContext(ctx);
     vm.runInContext(code, ctx);
@@ -444,13 +442,12 @@ describe("stringPool", () => {
   });
 
   it("encrypts class method string keys and method remains callable", () => {
-    const vm = require("vm") as typeof import("vm");
     const code = parseAndApply(
       "class C { 'greet'() { return 'hi'; } } var r = new C().greet();",
       (ast) => applyStringPool(ast, { seed: 42 })
     );
     expect(code).not.toContain("'greet'");
-    expect(code).toMatch(/\[_0x[0-9a-f]{8}\(/);
+    expect(code).toMatch(/\[_0x[0-9a-fасе]{16}\(/);
     const ctx: Record<string, unknown> = {};
     vm.createContext(ctx);
     vm.runInContext(code, ctx);
@@ -458,12 +455,12 @@ describe("stringPool", () => {
   });
 
   it("encrypts JSX attribute string values via JSXExpressionContainer", () => {
-    const ast = parse("<div className='bar'>t</div>;", {
-      sourceType: "script",
-      plugins: ["jsx"],
-    });
+    const ast = parseSync("<div className='bar'>t</div>;", {
+      syntax: "ecmascript",
+      jsx: true,
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     // String literal must be gone; expression container must replace it
     expect(code).not.toContain("'bar'");
     expect(code).not.toContain('"bar"');
@@ -471,45 +468,50 @@ describe("stringPool", () => {
   });
 
   it("encrypts export default string value", () => {
-    const ast = parse("export default 'secret';", { sourceType: "module" });
+    const ast = parseSync("export default 'secret';", {
+      syntax: "ecmascript",
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).not.toContain("'secret'");
     expect(code).not.toContain('"secret"');
-    expect(code).toMatch(/export default _0x[0-9a-f]{8}\(/);
+    expect(code).toMatch(/export default _0x[0-9a-fасе]{16}\(/);
   });
 
   it("preserves ES2022 export specifier string names", () => {
     // export { x as 'name' } — 'name' is a binding identifier, must stay
-    const ast = parse("const x = 1; export { x as 'thing' };", { sourceType: "module" });
+    const ast = parseSync("const x = 1; export { x as 'thing' };", {
+      syntax: "ecmascript",
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).toMatch(/as 'thing'|as "thing"/);
   });
 
   it("preserves ES2022 import specifier string names", () => {
     // import { 'foo' as bar } — 'foo' is the remote binding name, must stay
-    const ast = parse("import { 'foo' as bar } from './m';", { sourceType: "module" });
+    const ast = parseSync("import { 'foo' as bar } from './m';", {
+      syntax: "ecmascript",
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).toMatch(/'foo' as|"foo" as/);
   });
 
   it("skips empty string literals (no pool entry injected)", () => {
     const code = parseAndApply('var x = "";', (ast) => applyStringPool(ast, { seed: 42 }));
     // No pool function or pool array should appear — nothing to encrypt
-    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
+    expect(code).not.toMatch(/_0x[0-9a-fасе]{16}/);
     expect(code).toContain('""');
   });
 
   // ─── template literal encryption ──────────────────────────────────────────
 
   it("encrypts all-static template literal into a single pool call", () => {
-    const vm = require("vm") as typeof import("vm");
     // `hello` has no expressions — result should be just a pool call, not a template
     const code = parseAndApply("var s = `hello`;", (ast) => applyStringPool(ast, { seed: 42 }));
     expect(code).not.toContain("`hello`");
-    expect(code).toMatch(/_0x[0-9a-f]{8}\(/);
+    expect(code).toMatch(/_0x[0-9a-fасе]{16}\(/);
     const ctx: Record<string, unknown> = {};
     vm.createContext(ctx);
     vm.runInContext(code, ctx);
@@ -517,7 +519,6 @@ describe("stringPool", () => {
   });
 
   it("encrypts static quasis and preserves expressions in template literals", () => {
-    const vm = require("vm") as typeof import("vm");
     // `prefix${x}suffix` → _0xSP(...) + x + _0xSP(...)
     const code = parseAndApply("var x = 42; var s = `prefix${x}suffix`;", (ast) =>
       applyStringPool(ast, { seed: 42 })
@@ -532,7 +533,6 @@ describe("stringPool", () => {
   });
 
   it("encrypts template literal matching the utxo_algorithm.js console.log pattern", () => {
-    const vm = require("vm") as typeof import("vm");
     const src = "var a = 50000, b = 20; var s = `[설정] 목표 금액: ${a}, 수수료율: ${b}`;";
     const code = parseAndApply(src, (ast) => applyStringPool(ast, { seed: 42 }));
     expect(code).not.toContain("[설정]");
@@ -550,7 +550,7 @@ describe("stringPool", () => {
       applyStringPool(ast, { seed: 42 })
     );
     // No pool entries should be created (only x exists as a non-string)
-    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
+    expect(code).not.toMatch(/_0x[0-9a-fасе]{16}/);
   });
 
   it("does not transform tagged template literals", () => {
@@ -564,7 +564,6 @@ describe("stringPool", () => {
   });
 
   it("encrypts template literals and StringLiterals in the same file with correct runtime values", () => {
-    const vm = require("vm") as typeof import("vm");
     const src = ['var label = "count";', "var n = 3;", "var msg = `${label}: ${n} items`;"].join(
       "\n"
     );
@@ -580,90 +579,93 @@ describe("stringPool", () => {
   // ─── JSX: full pattern coverage ───────────────────────────────────────────
 
   it("encrypts all string attributes on a multi-attribute JSX element", () => {
-    const ast = parse('<div className="foo" id="bar" title="baz" />;', {
-      sourceType: "script",
-      plugins: ["jsx"],
-    });
+    const ast = parseSync('<div className="foo" id="bar" title="baz" />;', {
+      syntax: "ecmascript",
+      jsx: true,
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).not.toContain('"foo"');
     expect(code).not.toContain('"bar"');
     expect(code).not.toContain('"baz"');
     // Every attribute must be wrapped with expression container syntax
-    const wrappedCount = (code.match(/=\{_0x[0-9a-f]{8}\(/g) ?? []).length;
+    const wrappedCount = (code.match(/=\{_0x[0-9a-fасе]{16}\(/g) ?? []).length;
     expect(wrappedCount).toBe(3);
-    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript", jsx: true })).not.toThrow();
   });
 
   it("encrypts a string literal inside an explicit JSX expression container prop", () => {
     // <div title={"hello"} /> — StringLiteral parent is JSXExpressionContainer, not JSXAttribute
     // so kind = "normal"; the existing {} stays; result: title={_0xSP(...)}
-    const ast = parse('<div title={"hello"} />;', {
-      sourceType: "script",
-      plugins: ["jsx"],
-    });
+    const ast = parseSync('<div title={"hello"} />;', {
+      syntax: "ecmascript",
+      jsx: true,
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).not.toContain('"hello"');
     // No double-wrapping: exactly one layer of braces around the call
-    expect(code).toMatch(/title=\{_0x[0-9a-f]{8}\(/);
-    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(code).toMatch(/title=\{_0x[0-9a-fасе]{16}\(/);
+    expect(() => parseSync(code, { syntax: "ecmascript", jsx: true })).not.toThrow();
   });
 
   it("encrypts string literal inside JSX children expression container", () => {
     // <p>{'world'}</p> — StringLiteral is inside a JSXExpressionContainer child
-    const ast = parse("<p>{'world'}</p>;", {
-      sourceType: "script",
-      plugins: ["jsx"],
-    });
+    const ast = parseSync("<p>{'world'}</p>;", {
+      syntax: "ecmascript",
+      jsx: true,
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).not.toContain("'world'");
     expect(code).not.toContain('"world"');
-    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript", jsx: true })).not.toThrow();
   });
 
   it("does not encrypt JSXText (plain text children are not StringLiterals)", () => {
     // <p>plain text</p> — "plain text" is a JSXText node, not StringLiteral
-    const ast = parse("<p>plain text</p>;", {
-      sourceType: "script",
-      plugins: ["jsx"],
-    });
+    const ast = parseSync("<p>plain text</p>;", {
+      syntax: "ecmascript",
+      jsx: true,
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     // Nothing to encrypt — no pool injected, text survives intact
     expect(code).toContain("plain text");
-    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
+    expect(code).not.toMatch(/_0x[0-9a-fасе]{16}/);
   });
 
   it("does not break boolean and numeric JSX props", () => {
     // boolean props have null value; numeric props have NumericLiteral — neither is StringLiteral
-    const ast = parse("<Component disabled loading count={3} />;", {
-      sourceType: "script",
-      plugins: ["jsx"],
-    });
+    const ast = parseSync("<Component disabled loading count={3} />;", {
+      syntax: "ecmascript",
+      jsx: true,
+    }) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).toContain("disabled");
     expect(code).toContain("loading");
     expect(code).toContain("count={3}");
     // No pool — nothing to encrypt
-    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
-    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(code).not.toMatch(/_0x[0-9a-fасе]{16}/);
+    expect(() => parseSync(code, { syntax: "ecmascript", jsx: true })).not.toThrow();
   });
 
   it("encrypts template literal inside a JSX expression prop", () => {
     // <div aria-label={`Hello ${name}`} /> — quasi "Hello " must be encrypted
-    const ast = parse("const name = 'world'; const el = <div aria-label={`Hello ${name}`} />;", {
-      sourceType: "script",
-      plugins: ["jsx"],
-    });
+    const ast = parseSync(
+      "const name = 'world'; const el = <div aria-label={`Hello ${name}`} />;",
+      {
+        syntax: "ecmascript",
+        jsx: true,
+      }
+    ) as unknown as SwcProgram;
     applyStringPool(ast, { seed: 42 });
-    const code = generate(ast).code;
+    const code = printSync(ast as any).code;
     expect(code).not.toContain('"Hello "');
     expect(code).not.toContain("'Hello '");
     expect(code).not.toContain('"world"');
-    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript", jsx: true })).not.toThrow();
   });
 });
 
@@ -677,7 +679,7 @@ describe("controlFlowFlattening", () => {
     expect(code).toContain("switch");
     expect(code).toContain("while");
     // State variable is now a random hex identifier
-    expect(code).toMatch(/_0x[0-9a-f]{8}/);
+    expect(code).toMatch(/_0x[0-9a-fасе]{16}/);
   });
 
   it("generates one case per original statement", () => {
@@ -743,15 +745,15 @@ describe("deadCode", () => {
     const code = parseAndApply("const x = 1;", (ast) => applyDeadCode(ast, { targetLines: 5 }));
     // All 7 templates produce either randHexId (_0x<8hex>) or randInternalId (_mask_xxx, _hash_xxx, etc.)
     expect(code).toMatch(
-      /_0x[0-9a-f]{8}|_mask_|_hash_|_flag_|_val_|_acc_|_shift_|_buf_|_idx_|_key_|_state_|_tmp_|_crc_/
+      /_0x[0-9a-fасе]{16}|_mask_|_hash_|_flag_|_val_|_acc_|_shift_|_buf_|_idx_|_key_|_state_|_tmp_|_crc_/
     );
   });
 
   it("targetLines=0 injects nothing", () => {
     const ast = parseAst("const x = 1;");
-    const before = ast.program.body.length;
+    const before = (ast as any).body.length;
     applyDeadCode(ast, { targetLines: 0 });
-    expect(ast.program.body.length).toBe(before);
+    expect((ast as any).body.length).toBe(before);
   });
 
   it("injects exactly targetLines statements when body is large enough", () => {
@@ -760,24 +762,24 @@ describe("deadCode", () => {
     const ast = parseAst(
       "const a=1; const b=2; const c=3; const d=4; const e=5; const f=6; const g=7; const h=8;"
     );
-    const before = ast.program.body.length; // 8
+    const before = (ast as any).body.length; // 8
     applyDeadCode(ast, { targetLines: 6 });
-    expect(ast.program.body.length).toBe(before + 6);
+    expect((ast as any).body.length).toBe(before + 6);
   });
 
   it("output remains parseable after injection", () => {
     const code = parseAndApply("const a = 1; const b = 2;", (ast) =>
       applyDeadCode(ast, { targetLines: 10 })
     );
-    expect(() => parse(code, { sourceType: "script" })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
   });
 
   it("injects fewer than targetLines when stride exceeds body size", () => {
     // 1-statement body: stride +2 exhausts available slots after ~2 injections
     const ast = parseAst("const x = 1;");
-    const before = ast.program.body.length;
+    const before = (ast as any).body.length;
     applyDeadCode(ast, { targetLines: 20 });
-    expect(ast.program.body.length).toBeGreaterThan(before);
-    expect(ast.program.body.length).toBeLessThan(before + 20);
+    expect((ast as any).body.length).toBeGreaterThan(before);
+    expect((ast as any).body.length).toBeLessThan(before + 20);
   });
 });

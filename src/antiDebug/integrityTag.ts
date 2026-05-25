@@ -1,5 +1,5 @@
-import traverse from "@babel/traverse";
-import * as t from "@babel/types";
+import { traverse, t } from "../swc-utils";
+import type { SwcProgram } from "../swc-utils";
 import type { IntegrityTagOptions } from "../types";
 import { genId } from "../genId";
 
@@ -7,7 +7,7 @@ import { genId } from "../genId";
  * Pass: Symbol-based Integrity Tag
  *
  * Attaches a `Symbol(<description>)` integrity check value to every
- * array/object literal in the AST.  At runtime, code can verify the
+ * array literal in the AST.  At runtime, code can verify the
  * symbol is present to detect tampering (cloning, serialisation, etc.).
  *
  * The runtime helper `__obscura_tag` is prepended to the output:
@@ -20,7 +20,7 @@ import { genId } from "../genId";
  *
  * Arrays are replaced by:  __obscura_tag([...], <checksum>)
  */
-export function applyIntegrityTag(ast: t.File, options: IntegrityTagOptions = {}): void {
+export function applyIntegrityTag(ast: SwcProgram, options: IntegrityTagOptions = {}): void {
   // Randomize Symbol description when not explicitly provided — avoids a fixed "jas" fingerprint
   const defaultDesc = Math.floor(Math.random() * 0xffffffff)
     .toString(36)
@@ -88,5 +88,5 @@ export function applyIntegrityTag(ast: t.File, options: IntegrityTagOptions = {}
     ])
   );
 
-  (ast.program.body as t.Statement[]).unshift(tagDecl, symDecl);
+  (ast.body as any[]).unshift(tagDecl, symDecl); // eslint-disable-line @typescript-eslint/no-explicit-any
 }

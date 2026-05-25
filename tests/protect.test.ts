@@ -1,4 +1,4 @@
-import { parse } from "@babel/parser";
+import { parseSync } from "@swc/core";
 import { protect } from "../src/index";
 
 // ─── Input validation ────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ describe("protect() — output validity", () => {
       const result = greet("world");
     `;
     const { code } = protect(source);
-    expect(() => parse(code, { sourceType: "script" })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
   });
 
   it("output is parseable with every pass explicitly enabled", () => {
@@ -106,7 +106,7 @@ describe("protect() — output validity", () => {
         integrityTag: { tagDescription: "jas" },
       },
     });
-    expect(() => parse(code, { sourceType: "script" })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
   });
 });
 
@@ -134,7 +134,7 @@ describe("protect() — JSX input", () => {
       },
       antiDebug: { nativeBinding: false, integrityTag: false },
     });
-    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript", jsx: true })).not.toThrow();
     expect(code).not.toContain('"container"');
     expect(code).not.toContain('"main"');
     expect(code).not.toContain('"Hello"');
@@ -157,7 +157,7 @@ describe("protect() — JSX input", () => {
       },
       antiDebug: { nativeBinding: false, integrityTag: false },
     });
-    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript", jsx: true })).not.toThrow();
     expect(code).not.toContain('"bold"');
     expect(code).not.toContain('"greeting"');
   });
@@ -181,7 +181,7 @@ describe("protect() — JSX input", () => {
     expect(code).not.toContain('"world"');
     expect(code).not.toContain('"container-"');
     expect(code).not.toContain("'container-'");
-    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript", jsx: true })).not.toThrow();
   });
 
   it("JSXText children survive all passes unchanged", () => {
@@ -199,6 +199,6 @@ describe("protect() — JSX input", () => {
       antiDebug: { nativeBinding: false, integrityTag: false },
     });
     expect(code).toContain("plain text content");
-    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript", jsx: true })).not.toThrow();
   });
 });

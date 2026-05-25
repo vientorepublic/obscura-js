@@ -1,8 +1,9 @@
-import { parse } from "@babel/parser";
-import generate from "@babel/generator";
+import { parseSync, printSync } from "@swc/core";
 import { applyObfuscation } from "./obfuscation";
 import { applyAntiDebug } from "./antiDebug";
+import { resetIdRegistry } from "./genId";
 import type { ObscuraOptions, ProtectResult } from "./types";
+import type { SwcProgram } from "./swc-utils";
 
 export type { ObscuraOptions as HazeOptions, ProtectResult } from "./types";
 export type {
@@ -30,10 +31,12 @@ export function protect(source: string, options: ObscuraOptions = {}): ProtectRe
     throw new TypeError("source must be a string");
   }
 
-  const ast = parse(source, {
-    sourceType: "unambiguous",
-    plugins: ["jsx"],
-  });
+  resetIdRegistry();
+
+  const ast = parseSync(source, {
+    syntax: "ecmascript",
+    jsx: true,
+  }) as unknown as SwcProgram;
 
   const appliedPasses: string[] = [];
 
@@ -41,11 +44,11 @@ export function protect(source: string, options: ObscuraOptions = {}): ProtectRe
   applyAntiDebug(ast, options.antiDebug, appliedPasses);
 
   const stripComments = options.stripComments !== false;
+  void stripComments; // SWC strips comments by default in printSync output
 
-  const { code } = generate(ast, {
-    minified: options.minify ?? false,
-    compact: options.minify ?? false,
-    shouldPrintComment: stripComments ? () => false : undefined,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { code } = printSync(ast as any, {
+    minify: options.minify ?? false,
   });
 
   return { code, appliedPasses };

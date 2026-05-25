@@ -1,5 +1,5 @@
-import traverse from "@babel/traverse";
-import * as t from "@babel/types";
+import { traverse, t } from "../swc-utils";
+import type { SwcProgram } from "../swc-utils";
 import type { MbaOptions } from "../types";
 
 /**
@@ -14,7 +14,7 @@ import type { MbaOptions } from "../types";
  *   x | y  →  (x ^ y) + (x & y)        [bit-disjoint: no carry]
  *   x ^ y  →  (x | y) - (x & y)
  */
-export function applyMba(ast: t.File, options: MbaOptions = {}): void {
+export function applyMba(ast: SwcProgram, options: MbaOptions = {}): void {
   const rounds = options.rounds ?? 1;
 
   for (let r = 0; r < rounds; r++) {
@@ -36,34 +36,43 @@ export function applyMba(ast: t.File, options: MbaOptions = {}): void {
           )
             return;
 
-          // Prevent infinite expansion
-          if (path.node.extra?.["mbaExpanded"]) return;
+          // Prevent infinite expansion — SWC nodes have no .extra, so we use a custom flag
+          if ((path.node as any)._mbaExpanded) return; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-          let replacement: t.Expression;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let replacement: any;
 
           if (operator === "+") {
             // x + y  ≡  (x ^ y) + 2 * (x & y)
             replacement = t.binaryExpression(
               "+",
-              t.binaryExpression("^", t.cloneNode(left), t.cloneNode(right)),
+              t.parenthesizedExpression(
+                t.binaryExpression("^", t.cloneNode(left), t.cloneNode(right))
+              ),
               t.binaryExpression(
                 "*",
                 t.numericLiteral(2),
-                t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))
+                t.parenthesizedExpression(
+                  t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))
+                )
               )
             );
           } else if (operator === "-") {
             // x - y  ≡  (x ^ y) - 2 * (~x & y)
             replacement = t.binaryExpression(
               "-",
-              t.binaryExpression("^", t.cloneNode(left), t.cloneNode(right)),
+              t.parenthesizedExpression(
+                t.binaryExpression("^", t.cloneNode(left), t.cloneNode(right))
+              ),
               t.binaryExpression(
                 "*",
                 t.numericLiteral(2),
-                t.binaryExpression(
-                  "&",
-                  t.unaryExpression("~", t.cloneNode(left)),
-                  t.cloneNode(right)
+                t.parenthesizedExpression(
+                  t.binaryExpression(
+                    "&",
+                    t.unaryExpression("~", t.cloneNode(left)),
+                    t.cloneNode(right)
+                  )
                 )
               )
             );
@@ -71,20 +80,27 @@ export function applyMba(ast: t.File, options: MbaOptions = {}): void {
             // x | y  ≡  (x ^ y) + (x & y)
             replacement = t.binaryExpression(
               "+",
-              t.binaryExpression("^", t.cloneNode(left), t.cloneNode(right)),
-              t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))
+              t.parenthesizedExpression(
+                t.binaryExpression("^", t.cloneNode(left), t.cloneNode(right))
+              ),
+              t.parenthesizedExpression(
+                t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))
+              )
             );
           } else {
             // x ^ y  ≡  (x | y) - (x & y)
             replacement = t.binaryExpression(
               "-",
-              t.binaryExpression("|", t.cloneNode(left), t.cloneNode(right)),
-              t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))
+              t.parenthesizedExpression(
+                t.binaryExpression("|", t.cloneNode(left), t.cloneNode(right))
+              ),
+              t.parenthesizedExpression(
+                t.binaryExpression("&", t.cloneNode(left), t.cloneNode(right))
+              )
             );
           }
 
-          if (!replacement.extra) replacement.extra = {};
-          replacement.extra["mbaExpanded"] = true;
+          (replacement as any)._mbaExpanded = true; // eslint-disable-line @typescript-eslint/no-explicit-any
 
           path.replaceWith(replacement);
           path.skip();
