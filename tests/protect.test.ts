@@ -109,3 +109,96 @@ describe("protect() — output validity", () => {
     expect(() => parse(code, { sourceType: "script" })).not.toThrow();
   });
 });
+
+// ─── JSX input ────────────────────────────────────────────────────────────────
+
+describe("protect() — JSX input", () => {
+  it("accepts JSX source without throwing", () => {
+    const source = `const el = <div className="wrapper">hello</div>;`;
+    expect(() => protect(source)).not.toThrow();
+  });
+
+  it("produces parseable JSX output after stringPool pass", () => {
+    const source = `
+      const title = "Hello";
+      const el = <div className="container" id="main">{title}</div>;
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        stringPool: { seed: 42 },
+        mba: false,
+        sequenceExpression: false,
+        functionTable: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(code).not.toContain('"container"');
+    expect(code).not.toContain('"main"');
+    expect(code).not.toContain('"Hello"');
+  });
+
+  it("produces valid JSX output with all obfuscation passes applied to a component", () => {
+    const source = `
+      function Greeting({ name }) {
+        return <div className="bold" aria-label="greeting">{name}</div>;
+      }
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        mba: { rounds: 1 },
+        sequenceExpression: { probability: 1 },
+        functionTable: false,
+        stringPool: { seed: 1 },
+        controlFlowFlattening: { passes: 1 },
+        deadCode: { targetLines: 5 },
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+    expect(code).not.toContain('"bold"');
+    expect(code).not.toContain('"greeting"');
+  });
+
+  it("encrypts template literals mixed with JSX attribute props", () => {
+    const source = `
+      const name = "world";
+      const el = <div className={\`container-\${name}\`} />;
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        stringPool: { seed: 42 },
+        mba: false,
+        sequenceExpression: false,
+        functionTable: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(code).not.toContain('"world"');
+    expect(code).not.toContain('"container-"');
+    expect(code).not.toContain("'container-'");
+    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+  });
+
+  it("JSXText children survive all passes unchanged", () => {
+    // Plain text children are JSXText nodes — not StringLiterals — so they are never encrypted
+    const source = `const el = <p>plain text content</p>;`;
+    const { code } = protect(source, {
+      obfuscation: {
+        stringPool: { seed: 42 },
+        mba: false,
+        sequenceExpression: false,
+        functionTable: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(code).toContain("plain text content");
+    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+  });
+});

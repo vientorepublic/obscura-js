@@ -68,6 +68,14 @@ describe("sequenceExpression", () => {
     // Both && operators present
     expect(code.split("&&").length - 1).toBeGreaterThanOrEqual(2);
   });
+
+  it("does not flatten an empty block body (if (x) {})", () => {
+    // body.length=0: canFlatten must return false to avoid sequenceExpression([])
+    const source = "if (x) {}";
+    const code = parseAndApply(source, (ast) => applySequenceExpression(ast, { probability: 1 }));
+    expect(code).toContain("if");
+    expect(code).not.toContain("&&");
+  });
 });
 
 // ─── mba ─────────────────────────────────────────────────────────────────────
@@ -102,6 +110,35 @@ describe("mba", () => {
     expect(code).toContain("&");
     // No bare identifier + identifier pattern should remain
     expect(code).not.toMatch(/[a-z] \+ [a-z]/);
+  });
+
+  it("expands | into XOR-plus-AND form", () => {
+    const code = parseAndApply("const r = a | b;", (ast) => applyMba(ast, { rounds: 1 }));
+    expect(code).not.toMatch(/a \| b/);
+    expect(code).toContain("^");
+    expect(code).toContain("&");
+  });
+
+  it("expands ^ into OR-minus-AND form", () => {
+    const code = parseAndApply("const r = a ^ b;", (ast) => applyMba(ast, { rounds: 1 }));
+    expect(code).not.toMatch(/a \^ b/);
+    expect(code).toContain("|");
+    expect(code).toContain("&");
+  });
+
+  it("rounds=0 leaves code unchanged", () => {
+    const code = parseAndApply("const r = a + b;", (ast) => applyMba(ast, { rounds: 0 }));
+    expect(code).toContain("a + b");
+    expect(code).not.toContain("^");
+  });
+
+  it("does not expand string literal concatenation", () => {
+    const code = parseAndApply('const r = "hello" + " world";', (ast) =>
+      applyMba(ast, { rounds: 1 })
+    );
+    expect(code).toContain('"hello"');
+    expect(code).toContain('" world"');
+    expect(code).not.toContain("^");
   });
 });
 
@@ -190,6 +227,33 @@ describe("functionTable", () => {
     const code = generate(ast).code;
     expect(code).toContain("function greet");
     expect(code).not.toMatch(/const _0x[0-9a-f]{8} = \[/);
+  });
+
+  it("rewrites self-recursive call sites inside the function body", () => {
+    const vm = require("vm") as typeof import("vm");
+    const ast = parse(
+      "function fact(n) { return n <= 1 ? 1 : n * fact(n - 1); }\nvar r = fact(5);",
+      { sourceType: "script" }
+    );
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = generate(ast).code;
+    // Internal recursive call fact(n-1) must also be rewritten to a table lookup
+    expect(code).not.toContain("fact(");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe(120);
+  });
+
+  it("skips CJS module.exports = funcName (direct identifier assignment)", () => {
+    const ast = parse(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nmodule.exports = foo;\nbar();",
+      { sourceType: "script" }
+    );
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = generate(ast).code;
+    expect(code).toContain("function foo");
+    expect(code).toMatch(/const _0x[0-9a-f]{8} = \[/); // bar gets tabled
   });
 });
 
@@ -512,6 +576,95 @@ describe("stringPool", () => {
     vm.runInContext(code, ctx);
     expect(ctx["msg"]).toBe("count: 3 items");
   });
+
+  // ─── JSX: full pattern coverage ───────────────────────────────────────────
+
+  it("encrypts all string attributes on a multi-attribute JSX element", () => {
+    const ast = parse('<div className="foo" id="bar" title="baz" />;', {
+      sourceType: "script",
+      plugins: ["jsx"],
+    });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    expect(code).not.toContain('"foo"');
+    expect(code).not.toContain('"bar"');
+    expect(code).not.toContain('"baz"');
+    // Every attribute must be wrapped with expression container syntax
+    const wrappedCount = (code.match(/=\{_0x[0-9a-f]{8}\(/g) ?? []).length;
+    expect(wrappedCount).toBe(3);
+    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+  });
+
+  it("encrypts a string literal inside an explicit JSX expression container prop", () => {
+    // <div title={"hello"} /> — StringLiteral parent is JSXExpressionContainer, not JSXAttribute
+    // so kind = "normal"; the existing {} stays; result: title={_0xSP(...)}
+    const ast = parse('<div title={"hello"} />;', {
+      sourceType: "script",
+      plugins: ["jsx"],
+    });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    expect(code).not.toContain('"hello"');
+    // No double-wrapping: exactly one layer of braces around the call
+    expect(code).toMatch(/title=\{_0x[0-9a-f]{8}\(/);
+    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+  });
+
+  it("encrypts string literal inside JSX children expression container", () => {
+    // <p>{'world'}</p> — StringLiteral is inside a JSXExpressionContainer child
+    const ast = parse("<p>{'world'}</p>;", {
+      sourceType: "script",
+      plugins: ["jsx"],
+    });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    expect(code).not.toContain("'world'");
+    expect(code).not.toContain('"world"');
+    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+  });
+
+  it("does not encrypt JSXText (plain text children are not StringLiterals)", () => {
+    // <p>plain text</p> — "plain text" is a JSXText node, not StringLiteral
+    const ast = parse("<p>plain text</p>;", {
+      sourceType: "script",
+      plugins: ["jsx"],
+    });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    // Nothing to encrypt — no pool injected, text survives intact
+    expect(code).toContain("plain text");
+    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
+  });
+
+  it("does not break boolean and numeric JSX props", () => {
+    // boolean props have null value; numeric props have NumericLiteral — neither is StringLiteral
+    const ast = parse("<Component disabled loading count={3} />;", {
+      sourceType: "script",
+      plugins: ["jsx"],
+    });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    expect(code).toContain("disabled");
+    expect(code).toContain("loading");
+    expect(code).toContain("count={3}");
+    // No pool — nothing to encrypt
+    expect(code).not.toMatch(/_0x[0-9a-f]{8}/);
+    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+  });
+
+  it("encrypts template literal inside a JSX expression prop", () => {
+    // <div aria-label={`Hello ${name}`} /> — quasi "Hello " must be encrypted
+    const ast = parse("const name = 'world'; const el = <div aria-label={`Hello ${name}`} />;", {
+      sourceType: "script",
+      plugins: ["jsx"],
+    });
+    applyStringPool(ast, { seed: 42 });
+    const code = generate(ast).code;
+    expect(code).not.toContain('"Hello "');
+    expect(code).not.toContain("'Hello '");
+    expect(code).not.toContain('"world"');
+    expect(() => parse(code, { sourceType: "script", plugins: ["jsx"] })).not.toThrow();
+  });
 });
 
 // ─── controlFlowFlattening ───────────────────────────────────────────────────
@@ -556,6 +709,31 @@ describe("controlFlowFlattening", () => {
     const code = parseAndApply(source, (ast) => applyControlFlowFlattening(ast));
     expect(code).not.toContain("switch");
   });
+
+  it("flattens an arrow function with a block body", () => {
+    const source = "const f = (x) => { const a = x + 1; const b = a * 2; return b; };";
+    const code = parseAndApply(source, (ast) => applyControlFlowFlattening(ast));
+    expect(code).toContain("switch");
+    expect(code).toContain("while");
+  });
+
+  it("passes=0 is a no-op", () => {
+    const source = "function f() { const a = 1; const b = 2; }";
+    const code = parseAndApply(source, (ast) => applyControlFlowFlattening(ast, { passes: 0 }));
+    expect(code).not.toContain("switch");
+  });
+
+  it("skips empty function body (body.length = 0)", () => {
+    const code = parseAndApply("function f() {}", (ast) => applyControlFlowFlattening(ast));
+    expect(code).not.toContain("switch");
+  });
+
+  it("passes=2 wraps the state machine in a second outer state machine", () => {
+    const source = "function f() { const a = 1; const b = 2; const c = 3; }";
+    const code = parseAndApply(source, (ast) => applyControlFlowFlattening(ast, { passes: 2 }));
+    const switchCount = [...code.matchAll(/\bswitch\b/g)].length;
+    expect(switchCount).toBeGreaterThanOrEqual(2);
+  });
 });
 
 // ─── deadCode ────────────────────────────────────────────────────────────────
@@ -592,5 +770,14 @@ describe("deadCode", () => {
       applyDeadCode(ast, { targetLines: 10 })
     );
     expect(() => parse(code, { sourceType: "script" })).not.toThrow();
+  });
+
+  it("injects fewer than targetLines when stride exceeds body size", () => {
+    // 1-statement body: stride +2 exhausts available slots after ~2 injections
+    const ast = parseAst("const x = 1;");
+    const before = ast.program.body.length;
+    applyDeadCode(ast, { targetLines: 20 });
+    expect(ast.program.body.length).toBeGreaterThan(before);
+    expect(ast.program.body.length).toBeLessThan(before + 20);
   });
 });

@@ -29,6 +29,7 @@ export function applySequenceExpression(
       // Only flatten simple BlockStatement bodies (no declarations)
       const canFlatten = (node: t.Statement): node is t.BlockStatement =>
         t.isBlockStatement(node) &&
+        node.body.length > 0 &&
         node.body.every((s): s is t.ExpressionStatement => t.isExpressionStatement(s));
 
       if (!canFlatten(consequent)) return;

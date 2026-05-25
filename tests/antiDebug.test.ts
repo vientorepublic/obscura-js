@@ -73,6 +73,20 @@ describe("integrityTag", () => {
     // Symbol tag is not visible via JSON.stringify or Object.keys
     expect(JSON.stringify(arr)).toBe("[10,20]");
   });
+  it("independently tags each inner array of a nested array at runtime", () => {
+    const vm = require("vm") as typeof import("vm");
+    const source = "const matrix = [[10, 20], [30, 40]]; globalThis.__m = matrix;";
+    const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
+    expect(() => parse(code, { sourceType: "script" })).not.toThrow();
+    const ctx: Record<string, unknown> = { globalThis: {} };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    const m = (ctx["globalThis"] as Record<string, unknown>)["__m"] as number[][];
+    expect(m[0][0]).toBe(10);
+    expect(m[0][1]).toBe(20);
+    expect(m[1][0]).toBe(30);
+    expect(m[1][1]).toBe(40);
+  });
 });
 
 // ─── nativeBinding ────────────────────────────────────────────────────────────
@@ -120,6 +134,15 @@ describe("nativeBinding", () => {
     const code = parseAndApply("const x = 1;", (ast) =>
       applyNativeBinding(ast, { methods: ["Math.floor", "Object.keys"] })
     );
+    expect(() => parse(code, { sourceType: "script" })).not.toThrow();
+  });
+
+  it("injects two separate declarations for duplicate methods in the list", () => {
+    const code = parseAndApply("const x = 1;", (ast) =>
+      applyNativeBinding(ast, { methods: ["Math.floor", "Math.floor"] })
+    );
+    const bindingCount = (code.match(/Math\.floor\.bind\(Math\)/g) ?? []).length;
+    expect(bindingCount).toBe(2);
     expect(() => parse(code, { sourceType: "script" })).not.toThrow();
   });
 });

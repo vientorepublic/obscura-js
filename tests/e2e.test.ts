@@ -61,6 +61,44 @@ describe("E2E — MBA arithmetic", () => {
     });
     expect(exports_(run(code))).toBe(7);
   });
+
+  it("bitwise OR semantics are preserved", () => {
+    const source = `
+      const a = 0b1010, b = 0b1100;
+      module.exports = a | b;
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        mba: { rounds: 1 },
+        sequenceExpression: false,
+        functionTable: false,
+        stringPool: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(exports_(run(code))).toBe(0b1110); // 14
+  });
+
+  it("bitwise XOR semantics are preserved", () => {
+    const source = `
+      const a = 0b1010, b = 0b1100;
+      module.exports = a ^ b;
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        mba: { rounds: 1 },
+        sequenceExpression: false,
+        functionTable: false,
+        stringPool: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(exports_(run(code))).toBe(0b0110); // 6
+  });
 });
 
 // ─── String Pool ─────────────────────────────────────────────────────────────
@@ -176,6 +214,28 @@ describe("E2E — Control Flow Flattening", () => {
     });
     expect(exports_(run(code))).toBe(12); // (5*2 + 3 - 1) = 12
   });
+
+  it("function with an early return evaluates the correct branch", () => {
+    const source = `
+      function classify(n) {
+        if (n < 0) { return "negative"; }
+        return "non-negative";
+      }
+      module.exports = classify(-5);
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        controlFlowFlattening: { passes: 1 },
+        mba: false,
+        sequenceExpression: false,
+        functionTable: false,
+        stringPool: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(exports_(run(code))).toBe("negative");
+  });
 });
 
 // ─── Native Binding ───────────────────────────────────────────────────────────
@@ -254,5 +314,99 @@ describe("E2E — Full pipeline", () => {
       antiDebug: { nativeBinding: false, integrityTag: false },
     });
     expect(exports_(run(code))).toBe("yes");
+  });
+});
+
+// ─── Template Literal ─────────────────────────────────────────────────────────────
+
+describe("E2E — Template Literal encryption", () => {
+  it("static template literal round-trips to original string", () => {
+    const source = "module.exports = `hello world`;";
+    const { code } = protect(source, {
+      obfuscation: {
+        stringPool: { seed: 42 },
+        mba: false,
+        sequenceExpression: false,
+        functionTable: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(exports_(run(code))).toBe("hello world");
+  });
+
+  it("interpolated template literal preserves runtime value", () => {
+    const source = `
+      const name = "world";
+      module.exports = \`Hello, \${name}!\`;
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        stringPool: { seed: 7 },
+        mba: false,
+        sequenceExpression: false,
+        functionTable: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(exports_(run(code))).toBe("Hello, world!");
+  });
+});
+
+// ─── Combined passes ────────────────────────────────────────────────────────────
+
+describe("E2E — stringPool + controlFlowFlattening combined", () => {
+  it("function body with string literals produces correct output through both passes", () => {
+    const source = `
+      function greet(name) {
+        var prefix = "Hello";
+        var suffix = "welcome";
+        return prefix + ", " + name + "! " + suffix + ".";
+      }
+      module.exports = greet("Alice");
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        stringPool: { seed: 42 },
+        controlFlowFlattening: { passes: 1 },
+        mba: false,
+        sequenceExpression: false,
+        functionTable: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(exports_(run(code))).toBe("Hello, Alice! welcome.");
+  });
+});
+
+// ─── CFF passes=2 ───────────────────────────────────────────────────────────────
+
+describe("E2E — CFF passes=2", () => {
+  it("doubly-flattened function returns the correct result", () => {
+    const source = `
+      function compute(n) {
+        var a = n + 1;
+        var b = a * 2;
+        var c = b - n;
+        return c;
+      }
+      module.exports = compute(4);
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        controlFlowFlattening: { passes: 2 },
+        mba: false,
+        sequenceExpression: false,
+        functionTable: false,
+        stringPool: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(exports_(run(code))).toBe(6); // (4+1)*2 - 4 = 6
   });
 });

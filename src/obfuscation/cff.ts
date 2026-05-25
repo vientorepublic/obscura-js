@@ -30,7 +30,6 @@ export function applyControlFlowFlattening(
   options: ControlFlowFlatteningOptions = {}
 ): void {
   const passes = options.passes ?? 1;
-  const stateVar = genId();
 
   /**
    * If `stmt` is a let/const VariableDeclaration, extract the declarators into
@@ -72,6 +71,8 @@ export function applyControlFlowFlattening(
         if (body.length <= 1) return;
         if (body.some((s) => t.isSwitchStatement(s))) return;
 
+        // Fresh ID per function per pass — avoids collisions when passes>1
+        const stateVar = genId();
         const hoisted: t.VariableDeclarator[] = [];
 
         // Fisher-Yates shuffle to assign random case numbers (not sequential)
