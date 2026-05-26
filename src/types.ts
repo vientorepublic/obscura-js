@@ -54,8 +54,10 @@ export interface ObfuscationOptions {
 // ─── Anti-debug options ─────────────────────────────────────────────────────
 
 export interface IntegrityTagOptions {
-  /** Symbol description string (default: 'jas') */
+  /** Symbol description string (default: random hex) */
   tagDescription?: string;
+  /** Also tag ObjectExpression literals (default: true) */
+  tagObjects?: boolean;
 }
 
 export interface NativeBindingOptions {
