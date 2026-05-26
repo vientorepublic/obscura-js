@@ -1,223 +1,341 @@
-function _0x079909a2(v, checksum) {
-  Object.defineProperty(v, _0xd341bfb6, {
-    value: checksum,
-    enumerable: false
-  });
-  return v;
+function _0xaa90310а87eсdаа3(v, checksum, kind) {
+    Object.defineProperty(v, _0xе021f70db82fа08b, {
+        value: [
+            checksum,
+            kind
+        ],
+        enumerable: false,
+        configurable: false,
+        writable: false
+    });
+    return v;
 }
-const _0xd341bfb6 = Symbol("zom3i0");
-const _0xa765331d = Math.floor.bind(Math);
-const _0x51445b26 = Math.random.bind(Math);
-const _0xd4369e9e = Math.ceil.bind(Math);
-const _0xc0fd6ae5 = Math.round.bind(Math);
-const _0xef388021 = Object.defineProperty.bind(Object);
-const _0xc84bc675 = Object.keys.bind(Object);
-const _0x539c47ea = Array.prototype.slice.bind(Array.prototype);
-const _0x92268e2f = Array.prototype.forEach.bind(Array.prototype);
-{
-  var _tmp_5aa = 26088 ^ 3210233709;
-  _tmp_5aa = _tmp_5aa ^ _tmp_5aa >>> 16;
-  var _buf_d14 = _tmp_5aa >>> 0;
-  if (_buf_d14 < 0) {
-    _tmp_5aa = _buf_d14 ^ 20844;
-  }
-}
-function _0x7b8860c8(start, len, seed) {
-  {
-    var _mask_edb = 87 >> 6;
-    switch (_mask_edb) {
-      case 257:
-        var _0x41d0e943 = _mask_edb ^ 19369;
-        break;
-      case 513:
-        _mask_edb = 0;
-        break;
-    }
-  }
-  let _0x073d29b4 = 0;
-  var key, out;
-  {
-    var _val_7f5 = 22360 ^ 22360 | 0;
-    if (_val_7f5 >>> 1 >= 1073741824) {
-      _val_7f5 += 44597;
-    }
-  }
-  while (true) {
-    switch (_0x073d29b4) {
-      case 0:
-        key = seed, out = "";
-        _0x073d29b4 = 1;
-        break;
-      case 1:
-        for (let i = 0; i < len; i++) {
-          const b = (_0x36a19173[start + i] ^ key) & 65535;
-          out += String.fromCharCode(b);
-          key = key + _0x36a19173[start + i] & 65535;
+function _0xf81bd3b174267d81(v) {
+    var _tag = v[_0xе021f70db82fа08b];
+    if (_tag === undefined || _tag === null) {
+        if (Array.isArray(v)) {
+            for(var _ci = 0; _ci < v.length; _ci++)v[_ci] = 0;
+        } else {
+            var _ck = Object.keys(v);
+            for(var _cj = 0; _cj < _ck.length; _cj++)delete v[_ck[_cj]];
         }
-        _0x073d29b4 = 2;
-        break;
-      case 2:
-        return out;
-        _0x073d29b4 = -1;
-        break;
-      default:
-        return;
+        return v;
     }
-  }
-}
-{
-  var _key_11a = 54821 ^ 2246822507;
-  _key_11a = _key_11a ^ _key_11a >>> 16;
-  var _buf_0a2 = _key_11a >>> 0;
-  if (_buf_0a2 < 0) {
-    _key_11a = _buf_0a2 ^ 25236;
-  }
-}
-const _0x36a19173 = _0x079909a2([19827, 39627, 13589, 27362, 54559, 43683, 21778, 60243, 55013, 44541, 23490, 46853, 28173, 56340, 47330, 28948, 58021, 50526, 35559, 5455, 10961, 21997, 43791, 22248, 44294, 23051, 46309, 26951, 35272, 4885, 9963, 19736, 39655, 10145, 20453, 40715, 15896, 31975, 63824, 62113, 58626, 51712, 37894, 10266, 20720, 41299, 17057, 34069, 2589, 5367, 10724, 21265, 42721, 19784, 50808, 36077, 6415, 13032, 25862, 51723, 38117, 10564, 21193, 42259, 19172, 38146, 10818, 21635, 43268, 21002, 42100, 25727, 51427, 37248, 8990, 18046, 726, 1336, 2812, 5629, 11241, 22351, 41194, 16835, 33563, 1783, 3346, 6882, 13569, 27210, 16050, 32201, 64263, 62998, 60654], 678237878);
-{
-  var _key_529 = 0,
-    _0x7da2bbed = 0;
-  for (; _0x7da2bbed < 0; _0x7da2bbed++) {
-    _key_529 = (_key_529 ^ _0x7da2bbed * 3266489909) >>> 0;
-  }
-  if (_key_529 !== 0) {
-    _key_529 ^= 44597;
-  }
-}
-const _0xbcb19b7b = _0x079909a2([function (a, b) {
-  return (a ^ b) + 2 * (a & b);
-}, function (a, b) {
-  return a * b;
-}, function (name) {
-  let _0x073d29b4 = 0;
-  var msg;
-  (function _0x527a981a() {
-    var _flag_c1f = 175895103;
-    _flag_c1f ^= _flag_c1f >>> 16;
-    _flag_c1f = _flag_c1f * 3210233709 >>> 0;
-    return _flag_c1f;
-  })();
-  while (true) {
-    switch (_0x073d29b4) {
-      case 0:
-        msg = _0x7b8860c8(0, 7, 19771) + name + _0x7b8860c8(7, 21, 60274);
-        _0x073d29b4 = 1;
-        break;
-      case 1:
-        name === _0x7b8860c8(28, 5, 35241) ? console.log(_0x7b8860c8(33, 21, 10208)) : console.log(msg);
-        _0x073d29b4 = 2;
-        break;
-      case 2:
-        return msg;
-        _0x073d29b4 = -1;
-        break;
-      default:
-        return;
+    var _cs = _tag[0];
+    var _kind = _tag[1];
+    var _expected;
+    if (_kind === 1) {
+        var _acc = 15919;
+        for(var _vi = 0; _vi < v.length; _vi++){
+            var _el = v[_vi];
+            var _val = typeof _el === 'number' ? (_el & 0xffff) >>> 0 : typeof _el === 'boolean' ? (_el ? 1 : 0) : typeof _el === 'string' ? _el.charCodeAt(0) & 0xffff : 0;
+            _acc = (((_acc ^ _val) * 32795) ^ (_acc >>> 3)) >>> 0;
+        }
+        _expected = (((_acc ^ 15919) * 32795) ^ (15919 >>> 3)) >>> 0;
+    } else if (_kind === 2) {
+        var _len = Object.keys(v).length;
+        _expected = (((_len ^ 15919) * 32795) ^ (15919 >>> 3)) >>> 0;
+    } else {
+        _expected = (((v.length ^ 15919) * 32795) ^ (15919 >>> 3)) >>> 0;
     }
-  }
-}, function (x, y) {
-  {
-    var _state_b0e = 52066 ^ 2654435769;
-    _state_b0e = _state_b0e ^ _state_b0e >>> 16;
-    var _key_60f = _state_b0e >>> 0;
-    if (_key_60f < 0) {
-      _state_b0e = _key_60f ^ 30821;
+    if (_cs !== _expected) {
+        if (Array.isArray(v)) {
+            for(var _di = 0; _di < v.length; _di++)v[_di] = 0;
+        } else {
+            var _dk = Object.keys(v);
+            for(var _dj = 0; _dj < _dk.length; _dj++)delete v[_dk[_dj]];
+        }
     }
-  }
-  let _0x073d29b4 = 1;
-  var base, bonus, result;
-  while (true) {
-    switch (_0x073d29b4) {
-      case 1:
-        base = _0xbcb19b7b[0](x, y);
-        _0x073d29b4 = 0;
-        break;
-      case 0:
-        bonus = _0xbcb19b7b[1](base, 2);
-        _0x073d29b4 = 3;
-        break;
-      case 3:
-        result = (bonus ^ x) - 2 * (~bonus & x);
-        _0x073d29b4 = 2;
-        break;
-      case 2:
-        return result;
-        _0x073d29b4 = -1;
-        break;
-      default:
-        return;
+    return v;
+}
+const _0xе021f70db82fа08b = Symbol("6fq9w5");
+const _0x52df7d392е9f8а5a = Math.floor.bind(Math);
+const _0x0ab9117e0eсaedd7 = Math.random.bind(Math);
+const _0x5b5а7b37ff200b0f = Math.ceil.bind(Math);
+const _0x2ea9d6dfbe4dae92 = Math.round.bind(Math);
+const _0x6d5822e6сс930c51 = Object.defineProperty.bind(Object);
+const _0x0d306с09243e03f2 = Object.keys.bind(Object);
+const _0x5259dаbсеd048f20 = Array.prototype.slice.bind(Array.prototype);
+const _0xе9df5с4a9074f500 = Array.prototype.forEach.bind(Array.prototype);
+{
+    var _mask_e5d = 31112 ^ 31112 | 0;
+    if (_mask_e5d >>> 1 >= 1073741824) {
+        _mask_e5d += 31161;
     }
-  }
-}], 679841387);
-{
-  var _mask_da0 = 190 >> 6;
-  switch (_mask_da0) {
-    case 258:
-      var _0x408a4086 = _mask_da0 ^ 18285;
-      break;
-    case 514:
-      _mask_da0 = 0;
-      break;
-  }
+}function _0x59b4а391ce0е354f(start, len, seed) {
+    {
+        var _hash_1b5 = 156 >> 6;
+        switch(_hash_1b5){
+            case 258:
+                var _0x258aacc3 = _hash_1b5 ^ 44597;
+                break;
+            case 514:
+                _hash_1b5 = 0;
+                break;
+        }
+    }
+    let _0x88f2476f7de396с2 = 2;
+    var key, out;
+    while(true){
+        switch(_0x88f2476f7de396с2){
+            case 2:
+                key = seed, out = "";
+                _0x88f2476f7de396с2 = 0;
+                break;
+            case 0:
+                for(let i = 0; i < len; i++){
+                    const b = _0xd6e1b06803d3c8ec[start + i] ^ key & 65535;
+                    out += String.fromCharCode(b);
+                    key = key + _0xd6e1b06803d3c8ec[start + i] & 65535;
+                }
+                _0x88f2476f7de396с2 = 1;
+                break;
+            case 1:
+                return out;
+                _0x88f2476f7de396с2 = -1;
+                break;
+            default:
+                return;
+        }
+    }
 }
-const SECRET_KEY = _0x7b8860c8(54, 17, 50711);
 {
-  var _val_3b1 = 50250 ^ 50250 | 0;
-  if (_val_3b1 >>> 1 >= 1073741824) {
-    _val_3b1 += 31161;
-  }
-}
-const VERSION = _0x7b8860c8(71, 5, 25678);
+    var _flag_feb = 7043 & 59665 ^ 6163;
+    if (_flag_feb === 9289) {
+        var _buf_d2b = _flag_feb >>> 16 | _flag_feb & 65535;
+        _flag_feb = _buf_d2b ^ 51819;
+    }
+}const _0xd6e1b06803d3c8ec = _0xf81bd3b174267d81(_0xaa90310а87eсdаа3([
+    33864,
+    2093,
+    4121,
+    8418,
+    16671,
+    33443,
+    1298,
+    8726,
+    17517,
+    35053,
+    4546,
+    8965,
+    17933,
+    35860,
+    6370,
+    12564,
+    25253,
+    50526,
+    35559,
+    5455,
+    10961,
+    21997,
+    43791,
+    22248,
+    44294,
+    23051,
+    46309,
+    26951,
+    49167,
+    32793,
+    251,
+    504,
+    999,
+    24292,
+    48621,
+    31515,
+    63224,
+    60903,
+    56144,
+    46753,
+    27906,
+    55808,
+    46086,
+    26650,
+    53488,
+    41299,
+    17057,
+    34069,
+    2589,
+    5367,
+    10724,
+    21265,
+    42721,
+    19784,
+    64691,
+    63981,
+    62223,
+    59112,
+    52486,
+    39435,
+    13541,
+    26948,
+    53961,
+    42259,
+    19172,
+    38146,
+    10818,
+    21635,
+    43268,
+    21002,
+    42100,
+    39714,
+    13851,
+    27744,
+    55454,
+    45438,
+    14617,
+    29184,
+    58380,
+    51229,
+    37097,
+    8527,
+    55255,
+    44861,
+    24295,
+    48399,
+    31458,
+    62722,
+    59905,
+    54346,
+    30201,
+    60381,
+    55271,
+    44822,
+    24302
+], 3143343046, 1));
 {
-  var _tmp_ee5 = 0,
-    _0xdb769cb1 = 0;
-  for (; _0xdb769cb1 < 0; _0xdb769cb1++) {
-    _tmp_ee5 = (_tmp_ee5 ^ _0xdb769cb1 * 1798982569) >>> 0;
-  }
-  if (_tmp_ee5 !== 0) {
-    _tmp_ee5 ^= 19369;
-  }
-}
-const score = _0xbcb19b7b[3](7, 3);
-{
-  var _hash_ffb = 0,
-    _0x436f8557 = 0;
-  for (; _0x436f8557 < 0; _0x436f8557++) {
-    _hash_ffb = (_hash_ffb ^ _0x436f8557 * 2246822507) >>> 0;
-  }
-  if (_hash_ffb !== 0) {
-    _hash_ffb ^= 51819;
-  }
-}
-console.log(_0x7b8860c8(76, 6, 645), score);
-{
-  var _hash_fb9 = 169 >> 7;
-  switch (_hash_fb9) {
-    case 257:
-      var _0x6faaa4bb = _hash_fb9 ^ 31161;
-      break;
-    case 513:
-      _hash_fb9 = 0;
-      break;
-  }
-}
-console.log(_0x7b8860c8(82, 8, 41148), VERSION);
-{
-  var _val_b8f = 247 >> 6;
-  switch (_val_b8f) {
-    case 259:
-      var _0x87efc4c2 = _val_b8f ^ 44597;
-      break;
-    case 515:
-      _val_b8f = 0;
-      break;
-  }
-}
-console.log(_0xbcb19b7b[2](_0x7b8860c8(90, 5, 16115)));
+    var _hash_aff = 62470 ^ 2654435769;
+    _hash_aff = _hash_aff ^ _hash_aff >>> 16;
+    var _idx_c95 = _hash_aff >>> 0;
+    if (_idx_c95 < 0) {
+        _hash_aff = _idx_c95 ^ 25523;
+    }
+}const _0x71с2e15с6b3f2277 = _0xf81bd3b174267d81(_0xaa90310а87eсdаа3([
+    function(a, b) {
+        return (a ^ b) + 2 * (a & b);
+    },
+    function(a, b) {
+        return a * b;
+    },
+    function(name) {
+        {
+            var _tmp_675 = 0, _0x9d08c5be = 0;
+            for(; _0x9d08c5be < 0; _0x9d08c5be++){
+                _tmp_675 = _tmp_675 ^ _0x9d08c5be * 2246822507 >>> 0;
+            }
+            if (_tmp_675 !== 0) {
+                _tmp_675 ^= 51819;
+            }
+        }
+        let _0x17сa8cdb842b28df = 1;
+        var msg;
+        while(true){
+            switch(_0x17сa8cdb842b28df){
+                case 1:
+                    msg = _0x59b4а391ce0е354f(0, 7, 33792) + name + _0x59b4а391ce0е354f(7, 21, 8759);
+                    _0x17сa8cdb842b28df = 2;
+                    break;
+                case 2:
+                    name === _0x59b4а391ce0е354f(28, 5, 49262) ? console.log(_0x59b4а391ce0е354f(33, 21, 24229)) : console.log(msg);
+                    _0x17сa8cdb842b28df = 0;
+                    break;
+                case 0:
+                    return msg;
+                    _0x17сa8cdb842b28df = -1;
+                    break;
+                default:
+                    return;
+            }
+        }
+    },
+    function(x, y) {
+        let _0xссdc2329324da71b = 3;
+        var base, bonus, result;
+        {
+            var _val_664 = 101 >> 4;
+            switch(_val_664){
+                case 262:
+                    var _0x53789f9a = _val_664 ^ 19369;
+                    break;
+                case 518:
+                    _val_664 = 0;
+                    break;
+            }
+        }
+        while(true){
+            switch(_0xссdc2329324da71b){
+                case 3:
+                    base = _0x71с2e15с6b3f2277[0](x, y);
+                    _0xссdc2329324da71b = 2;
+                    break;
+                case 2:
+                    bonus = _0x71с2e15с6b3f2277[1](base, 2);
+                    _0xссdc2329324da71b = 1;
+                    break;
+                case 1:
+                    result = (bonus ^ x) - 2 * (~bonus & x);
+                    _0xссdc2329324da71b = 0;
+                    break;
+                case 0:
+                    return result;
+                    _0xссdc2329324da71b = -1;
+                    break;
+                default:
+                    return;
+            }
+        }
+    }
+], 521931084, 0));
 try {
-  var _flag_b9b = 2147483647,
-    _shift_219 = 2147483647 >>> 2;
-  while (_flag_b9b < _shift_219) {
-    _flag_b9b = _flag_b9b >>> 1 ^ 31161;
-  }
+    var _tmp_a91 = 2147483647, _shift_f80 = 2147483647 >>> 2;
+    while(_tmp_a91 < _shift_f80){
+        _tmp_a91 = _tmp_a91 >>> 1 ^ 44597;
+    }
 } catch (_e) {}
+const SECRET_KEY = _0x59b4а391ce0е354f(54, 17, 64732);
+try {
+    var _idx_93b = 2147483647, _state_f10 = 2147483647 >>> 2;
+    while(_idx_93b < _state_f10){
+        _idx_93b = _idx_93b >>> 1 ^ 44597;
+    }
+} catch (_e) {}
+const VERSION = _0x59b4а391ce0е354f(71, 5, 39699);
+{
+    var _shift_5af = 0, _0x979f5dfd = 0;
+    for(; _0x979f5dfd < 0; _0x979f5dfd++){
+        _shift_5af = _shift_5af ^ _0x979f5dfd * 2246822507 >>> 0;
+    }
+    if (_shift_5af !== 0) {
+        _shift_5af ^= 51819;
+    }
+}const score = _0x71с2e15с6b3f2277[3](7, 3);
+{
+    var _mask_995 = 18991 ^ 2654435769;
+    _mask_995 = _mask_995 ^ _mask_995 >>> 16;
+    var _mask_b59 = _mask_995 >>> 0;
+    if (_mask_b59 < 0) {
+        _mask_995 = _mask_b59 ^ 54936;
+    }
+}console.log(_0x59b4а391ce0е354f(76, 6, 14666), score);
+{
+    var _state_20d = 32659 & 22266 ^ 65236;
+    if (_state_20d === 47997) {
+        var _key_c61 = _state_20d >>> 16 | _state_20d & 65535;
+        _state_20d = _key_c61 ^ 51819;
+    }
+}console.log(_0x59b4а391ce0е354f(82, 8, 55169), VERSION);
+{
+    var _acc_578 = 36421 & 10449 ^ 52712;
+    if (_acc_578 === 55520) {
+        var _buf_0c8 = _acc_578 >>> 16 | _acc_578 & 65535;
+        _acc_578 = _buf_0c8 ^ 44597;
+    }
+}console.log(_0x71с2e15с6b3f2277[2](_0x59b4а391ce0е354f(90, 5, 30136)));
+{
+    var _hash_31d = 0, _0x75ccd6e1 = 0;
+    for(; _0x75ccd6e1 < 0; _0x75ccd6e1++){
+        _hash_31d = _hash_31d ^ _0x75ccd6e1 * 3266489909 >>> 0;
+    }
+    if (_hash_31d !== 0) {
+        _hash_31d ^= 44597;
+    }
+}

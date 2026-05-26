@@ -1,4 +1,4 @@
-import type * as t from "@babel/types";
+import type { SwcProgram } from "../swc-utils";
 import type { ObfuscationOptions } from "../types";
 import { applySequenceExpression } from "./sequenceExpression";
 import { applyMba } from "./mba";
@@ -21,7 +21,7 @@ export {
  * Each pass is opt-in: pass `false` to skip it entirely.
  */
 export function applyObfuscation(
-  ast: t.File,
+  ast: SwcProgram,
   options: ObfuscationOptions = {},
   appliedPasses: string[]
 ): void {

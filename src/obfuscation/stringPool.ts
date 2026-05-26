@@ -1,5 +1,5 @@
-import traverse, { type NodePath } from "@babel/traverse";
-import * as t from "@babel/types";
+import { traverse, t, type NodePath } from "../swc-utils";
+import type { SwcProgram } from "../swc-utils";
 import type { StringPoolOptions } from "../types";
 import { genId } from "../genId";
 
@@ -23,13 +23,18 @@ function encryptString(str: string, seed: number): { ciphertext: number[]; seed:
  * Returns true for require("x"), require.resolve("x"), require.main.require("x"), etc.
  * These strings must be preserved for static analysis tools and bundlers.
  */
-function isRequireLikeCall(node: t.Node): boolean {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isRequireLikeCall(node: any): boolean {
   if (!t.isCallExpression(node)) return false;
   const callee = node.callee;
   // require("x")
-  if (t.isIdentifier(callee, { name: "require" })) return true;
+  if (t.isIdentifier(callee) && (callee as any).value === "require") return true; // eslint-disable-line @typescript-eslint/no-explicit-any
   // require.resolve("x"), require.main.require("x"), etc. — check root object is `require`
-  if (t.isMemberExpression(callee) && t.isIdentifier(callee.object, { name: "require" }))
+  if (
+    t.isMemberExpression(callee) &&
+    t.isIdentifier((callee as any).object) && // eslint-disable-line @typescript-eslint/no-explicit-any
+    (callee as any).object.value === "require" // eslint-disable-line @typescript-eslint/no-explicit-any
+  )
     return true;
   return false;
 }
@@ -42,9 +47,9 @@ function isRequireLikeCall(node: t.Node): boolean {
  * used in Google reCAPTCHA's string obfuscation.
  *
  * Before:  "hello"
- * After:   __obscura_sp(0, 4, <seed>)
+ * After:   __obscura_sp(0, 5, <seed>)
  */
-export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): void {
+export function applyStringPool(ast: SwcProgram, options: StringPoolOptions = {}): void {
   // Per-call random identifiers — indistinguishable from dead-code variables.
   const POOL_FN = genId();
   const POOL_VAR = genId();
@@ -70,7 +75,7 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
   }
 
   const replacements: Array<{
-    path: NodePath<t.StringLiteral>;
+    path: NodePath<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     start: number;
     len: number;
     entrySeed: number;
@@ -81,7 +86,7 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
   // Each entry: the TemplateLiteral path + per-quasi pool call info.
   // null means "skip this quasi" (empty string or null cooked value).
   const templateReplacements: Array<{
-    path: NodePath<t.TemplateLiteral>;
+    path: NodePath<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     quasiCalls: Array<{ start: number; len: number; entrySeed: number } | null>;
   }> = [];
 
@@ -95,7 +100,7 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
         t.isImportSpecifier(path.parent) || // import { "name" as x }  (ES2022)
         t.isExportSpecifier(path.parent) || // export { x as "name" }  (ES2022)
         // dynamic import('./path') — parsed as CallExpression { callee: Import }
-        (t.isCallExpression(path.parent) && t.isImport(path.parent.callee)) ||
+        (t.isCallExpression(path.parent) && t.isImport((path.parent as any).callee)) || // eslint-disable-line @typescript-eslint/no-explicit-any
         isRequireLikeCall(path.parent)
       ) {
         return;
@@ -110,12 +115,12 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
       let kind: "normal" | "computed-key" | "jsx-attr" = "normal";
       if (
         path.key === "key" &&
-        !("computed" in path.parent && (path.parent as { computed: boolean }).computed) &&
+        !((path.parent as any).key?.type === "Computed") && // eslint-disable-line @typescript-eslint/no-explicit-any
         (t.isObjectProperty(path.parent) ||
           t.isObjectMethod(path.parent) ||
           t.isClassProperty(path.parent) ||
           t.isClassMethod(path.parent) ||
-          path.parent.type === "ClassAccessorProperty")
+          (path.parent as any).type === "ClassAccessorProperty") // eslint-disable-line @typescript-eslint/no-explicit-any
       ) {
         kind = "computed-key";
       } else if (t.isJSXAttribute(path.parent) && path.key === "value") {
@@ -135,10 +140,9 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
       let hasEncryptedQuasi = false;
 
       for (const quasi of path.node.quasis) {
-        const cooked = quasi.value.cooked;
+        // In SWC, TemplateElement uses .cooked directly (not .value.cooked)
+        const cooked = (quasi as any).cooked ?? null; // eslint-disable-line @typescript-eslint/no-explicit-any
         // Skip empty quasis (e.g. the edges of `${x}`) and null cooked values
-        // (invalid escape sequences, though these won't appear here since tagged
-        // templates are already filtered out above).
         if (cooked == null || cooked === "") {
           quasiCalls.push(null);
           continue;
@@ -162,9 +166,13 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
       t.numericLiteral(entrySeed),
     ]);
     if (kind === "computed-key") {
-      // Flip to computed so the generator emits { [expr]: value } syntax
-      (path.parent as { computed: boolean }).computed = true;
-      path.replaceWith(callExpr);
+      // Flip to computed: in SWC, set the key to a Computed node
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (path.parent as any).key = {
+        type: "Computed",
+        expression: callExpr,
+        span: { start: 0, end: 0, ctxt: 0 },
+      };
     } else if (kind === "jsx-attr") {
       // JSXAttribute.value only accepts StringLiteral | JSXExpressionContainer
       path.replaceWith(t.jsxExpressionContainer(callExpr));
@@ -176,8 +184,8 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
   // ── Replace TemplateLiterals with string concatenation ───────────────────
   // `hello ${x} world` → _0xSP(0, 5, s1) + x + _0xSP(5, 6, s2)
   for (const { path, quasiCalls } of templateReplacements) {
-    const { expressions } = path.node;
-    const parts: t.Expression[] = [];
+    const expressions: any[] = path.node.expressions ?? []; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const parts: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     // Interleave quasis and expressions: q[0] e[0] q[1] e[1] ... q[n]
     for (let i = 0; i < quasiCalls.length; i++) {
@@ -193,8 +201,6 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
       }
       if (i < expressions.length) {
         const expr = expressions[i];
-        // In standard JS AST, TemplateLiteral expressions are always Expression
-        // nodes (never TSType), so this guard is purely a type-safety measure.
         if (t.isExpression(expr)) parts.push(expr);
       }
     }
@@ -206,7 +212,7 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
       path.replaceWith(parts[0]);
     } else {
       // Build left-associative binary chain: ((a + b) + c) + d
-      let result: t.Expression = t.binaryExpression("+", parts[0], parts[1]);
+      let result: any = t.binaryExpression("+", parts[0], parts[1]); // eslint-disable-line @typescript-eslint/no-explicit-any
       for (let k = 2; k < parts.length; k++) {
         result = t.binaryExpression("+", result, parts[k]);
       }
@@ -291,5 +297,5 @@ export function applyStringPool(ast: t.File, options: StringPoolOptions = {}): v
     ])
   );
 
-  (ast.program.body as t.Statement[]).unshift(decryptFn, poolArray);
+  (ast.body as any[]).unshift(decryptFn, poolArray); // eslint-disable-line @typescript-eslint/no-explicit-any
 }

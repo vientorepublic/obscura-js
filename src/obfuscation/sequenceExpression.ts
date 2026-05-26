@@ -1,5 +1,5 @@
-import traverse from "@babel/traverse";
-import * as t from "@babel/types";
+import { traverse, t } from "../swc-utils";
+import type { SwcProgram } from "../swc-utils";
 import type { SequenceExpressionOptions } from "../types";
 
 /**
@@ -12,10 +12,10 @@ import type { SequenceExpressionOptions } from "../types";
  *   if (cond) { a = 1; b = 2; }
  *
  * After:
- *   cond && ((a = 1), (b = 2));
+ *   cond && (a = 1, b = 2);
  */
 export function applySequenceExpression(
-  ast: t.File,
+  ast: SwcProgram,
   options: SequenceExpressionOptions = {}
 ): void {
   const probability = options.probability ?? 1.0;
@@ -27,30 +27,30 @@ export function applySequenceExpression(
       const { test, consequent, alternate } = path.node;
 
       // Only flatten simple BlockStatement bodies (no declarations)
-      const canFlatten = (node: t.Statement): node is t.BlockStatement =>
+      // In SWC, BlockStatement uses .stmts (not .body)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const canFlatten = (node: any): boolean =>
         t.isBlockStatement(node) &&
-        node.body.length > 0 &&
-        node.body.every((s): s is t.ExpressionStatement => t.isExpressionStatement(s));
+        node.stmts.length > 0 &&
+        node.stmts.every((s: any) => t.isExpressionStatement(s)); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       if (!canFlatten(consequent)) return;
       if (alternate !== null && alternate !== undefined && !canFlatten(alternate)) return;
 
-      const toSeq = (block: t.BlockStatement): t.Expression => {
-        const exprs = (block.body as t.ExpressionStatement[]).map((s) => s.expression);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const toSeq = (block: any): any => {
+        const exprs = block.stmts.map((s: any) => s.expression); // eslint-disable-line @typescript-eslint/no-explicit-any
         return exprs.length === 1 ? exprs[0] : t.sequenceExpression(exprs);
       };
 
-      let replacement: t.Expression;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let replacement: any;
       if (alternate === null || alternate === undefined) {
         // if (cond) { ... }  →  cond && (...)
-        replacement = t.logicalExpression("&&", test, toSeq(consequent as t.BlockStatement));
+        replacement = t.logicalExpression("&&", test, toSeq(consequent));
       } else {
         // if (cond) { ... } else { ... }  →  cond ? (...) : (...)
-        replacement = t.conditionalExpression(
-          test,
-          toSeq(consequent as t.BlockStatement),
-          toSeq(alternate as t.BlockStatement)
-        );
+        replacement = t.conditionalExpression(test, toSeq(consequent), toSeq(alternate));
       }
 
       path.replaceWith(t.expressionStatement(replacement));

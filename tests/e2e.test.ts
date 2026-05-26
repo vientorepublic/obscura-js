@@ -4,7 +4,7 @@
  * and asserts that observable behaviour is identical to the original code.
  */
 import * as vm from "vm";
-import { parse } from "@babel/parser";
+import { parseSync } from "@swc/core";
 import { protect } from "../src/index";
 
 // Helpers ────────────────────────────────────────────────────────────────────
@@ -275,7 +275,7 @@ describe("E2E — Full pipeline", () => {
     `;
     const { code, appliedPasses } = protect(source);
     // Must parse cleanly
-    expect(() => parse(code, { sourceType: "script" })).not.toThrow();
+    expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
     // Several passes must have been applied
     expect(appliedPasses.length).toBeGreaterThan(0);
   });

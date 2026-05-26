@@ -53,7 +53,7 @@ describe("CJS compatibility", () => {
   });
 
   it("require() from dist path exposes protect()", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     const mod = require(DIST_INDEX) as Record<string, unknown>;
     expect(typeof mod.protect).toBe("function");
   });
