@@ -25,6 +25,7 @@ import { genId } from "../genId";
 /** Returns true when all array elements are scalar literals (no spreads). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isPureLiteralArray(elements: any[]): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return elements.every((el: any) => {
     if (el === null) return true; // sparse hole
     if (el.spread) return false; // spread element

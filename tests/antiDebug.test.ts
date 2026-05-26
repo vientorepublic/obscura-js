@@ -512,3 +512,68 @@ describe("integrityTag — _0xVerify tamper detection", () => {
     expect(Object.keys(obj)).toHaveLength(0);
   });
 });
+
+// ─── integrityTag — sparse holes and spread elements ─────────────────────────
+
+describe("integrityTag — sparse holes and spread elements", () => {
+  it("sparse hole [1,,3] is treated as pure literal (null = kind 1) at runtime", () => {
+    // A sparse array hole is represented as null in SWC's elements array.
+    // isPureLiteralArray returns true for null (hole counts as pure).
+    // contentChecksum treats null/undefined elements as val=0.
+    const source = "const a = [1,,3]; globalThis.__a = a;";
+    const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
+    expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
+    const ctx: Record<string, unknown> = { globalThis: {} };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    const arr = (ctx["globalThis"] as Record<string, unknown>)["__a"] as unknown[];
+    // Values at known positions are intact
+    expect(arr[0]).toBe(1);
+    expect(arr[2]).toBe(3);
+    // kind=1 (content-based): null hole contributes val=0 to checksum
+    const sym = Object.getOwnPropertySymbols(arr)[0];
+    expect((arr as any)[sym][1]).toBe(1);
+  });
+
+  it("array with spread element [...x, 1] gets kind=0 (not pure literal)", () => {
+    // isPureLiteralArray returns false as soon as it sees el.spread is non-null.
+    // The array falls back to length-based checksum (kind=0).
+    const source = "var x = [9]; const a = [...x, 1]; globalThis.__a = a;";
+    const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
+    const ctx: Record<string, unknown> = { globalThis: {} };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    const arr = (ctx["globalThis"] as Record<string, unknown>)["__a"] as unknown[];
+    expect(arr[0]).toBe(9);
+    expect(arr[1]).toBe(1);
+    // kind=0 (length-based) because of spread
+    const sym = Object.getOwnPropertySymbols(arr)[0];
+    expect((arr as any)[sym][1]).toBe(0);
+  });
+
+  it("pure string literal array ['a','b'] gets kind=1 (content-based checksum)", () => {
+    // Exercises the StringLiteral branch inside contentChecksum.
+    const source = "const a = ['hello', 'world']; globalThis.__a = a;";
+    const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
+    const ctx: Record<string, unknown> = { globalThis: {} };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    const arr = (ctx["globalThis"] as Record<string, unknown>)["__a"] as string[];
+    expect(arr[0]).toBe("hello");
+    expect(arr[1]).toBe("world");
+    const sym = Object.getOwnPropertySymbols(arr)[0];
+    expect((arr as any)[sym][1]).toBe(1); // content-based
+  });
+
+  it("mixed array [a, 'literal'] (identifier + string) gets kind=0", () => {
+    // One identifier makes isPureLiteralArray return false → length-based.
+    const source = "var a = 1; const arr = [a, 'x']; globalThis.__arr = arr;";
+    const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
+    const ctx: Record<string, unknown> = { globalThis: {} };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    const arr = (ctx["globalThis"] as Record<string, unknown>)["__arr"] as unknown[];
+    const sym = Object.getOwnPropertySymbols(arr)[0];
+    expect((arr as any)[sym][1]).toBe(0); // length-based
+  });
+});

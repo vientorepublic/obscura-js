@@ -79,6 +79,25 @@ describe("sequenceExpression", () => {
     expect(code).toContain("if");
     expect(code).not.toContain("&&");
   });
+
+  it("uses default probability=1.0 when called without options", () => {
+    // Line 19: options = {} default parameter — all eligible if-statements are flattened
+    const code = parseAndApply("if (condition) { doSomething(); }", (ast) =>
+      applySequenceExpression(ast)
+    );
+    expect(code).toContain("&&");
+    expect(code).not.toContain("if (");
+  });
+
+  it("leaves if-else intact when else body contains a declaration", () => {
+    // Line 38: alternate is not flattenable (let declaration introduces scope)
+    // The whole if-else is preserved when canFlatten(alternate) returns false.
+    const source = "if (condition) { doSomething(); } else { let x = 2; }";
+    const code = parseAndApply(source, (ast) => applySequenceExpression(ast, { probability: 1 }));
+    expect(code).toContain("if");
+    expect(code).toContain("else");
+    expect(code).toContain("let");
+  });
 });
 
 // ─── mba ─────────────────────────────────────────────────────────────────────
@@ -175,6 +194,14 @@ describe("mba", () => {
     vm.createContext(ctx);
     vm.runInContext(code, ctx);
     expect(ctx["__r"]).toBe(12);
+  });
+
+  it("uses default rounds=1 when called without options", () => {
+    // Line 17: options = {} default parameter — one round of MBA expansion
+    const code = parseAndApply("const r = a + b;", (ast) => applyMba(ast));
+    expect(code).toContain("^");
+    expect(code).toContain("&");
+    expect(code).not.toMatch(/a \+ b/);
   });
 });
 
@@ -330,6 +357,154 @@ describe("functionTable", () => {
     vm.createContext(ctx);
     vm.runInContext(code, ctx);
     expect(ctx["__r"]).toBe("Hello world");
+  });
+
+  it("skips ExportNamedDeclaration that is a re-export from another file", () => {
+    // Line 33: path.node.source is set → early return (no local binding leaked)
+    // The local helper is not protected and can be moved to the table.
+    const ast = parseSync(
+      "function helper() { return 1; }\nexport { helper } from './other';\nhelper();",
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+    expect(code).not.toContain("function helper");
+  });
+
+  it("export default with non-identifier expression does not prevent tabling", () => {
+    // Line 48: ExportDefaultExpression — expr is NumericLiteral, not Identifier → no leak
+    const ast = parseSync(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nexport default 42;\nfoo();\nbar();",
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+    expect(code).not.toContain("function foo(");
+    expect(code).not.toContain("function bar(");
+  });
+
+  it("module.exports = { key: funcName } keyed property marks function as leaked", () => {
+    // Lines 61-66: ObjectProperty { key: Identifier, value: Identifier } branch
+    const ast = parseSync(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nmodule.exports = { myFoo: foo };\nbar();",
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toContain("function foo"); // leaked via key-value property
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+    expect(code).not.toContain("function bar(");
+  });
+
+  it("module.exports = { ...spread } SpreadElement is skipped without crashing", () => {
+    // Line 64: t.isIdentifier(prop) = false for SpreadElement
+    // Line 66: t.isObjectProperty(prop) = false for SpreadElement → no names added
+    const ast = parseSync(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nmodule.exports = { ...someObj };\nfoo();\nbar();",
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+  });
+
+  it("FunctionDeclaration inside ExportDeclaration is not moved to table", () => {
+    // Line 87: parent is ExportDeclaration (not Program/BlockStatement) → early return
+    const ast = parseSync(
+      "export function foo() { return 1; }\nfunction bar() { return 2; }\nbar();",
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toContain("function foo"); // not collected
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+    expect(code).not.toContain("function bar(");
+  });
+
+  it("module.exports.foo = fn triple-chain marks function as leaked", () => {
+    // Lines 167-168: isExportsTarget detects module.exports.<prop> = fn pattern
+    const ast = parseSync(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nmodule.exports.foo = foo;\nbar();",
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toContain("function foo"); // leaked via triple chain
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+    expect(code).not.toContain("function bar(");
+  });
+
+  it("bare exports = fn assignment marks function as leaked (line 151 true-branch)", () => {
+    // isExportsTarget: t.isIdentifier && value === 'exports' → return true
+    const ast = parseSync(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nexports = foo;\nbar();",
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toContain("function foo"); // leaked via bare exports
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+  });
+
+  it("non-CJS assignment (someObj.method = fn) does not prevent tabling", () => {
+    // Line 57: isExportsTarget returns false → AssignmentExpression visitor returns early
+    const ast = parseSync("function foo() { return 1; }\nsomeObj.method = foo;\nfoo();", {
+      syntax: "ecmascript",
+    }) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+    expect(code).not.toContain("function foo(");
+  });
+
+  it("anonymous export default function has no identifier and is skipped (line 86)", () => {
+    // Line 86 true branch: !node.identifier is true → early return
+    // 'export default function() {}' creates FunctionDeclaration with null identifier
+    const ast = parseSync(
+      "export default function() { return 0; }\nfunction bar() { return 2; }\nbar();",
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+    expect(code).not.toContain("function bar(");
+  });
+
+  it("call to a leaked function is skipped in call-site replacement (line 106)", () => {
+    // Line 106: idx === undefined because 'bar' is leaked (not in nameToIndex)
+    // The CallExpression visitor returns early for bar() since bar is not in table
+    const ast = parseSync(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nmodule.exports = bar;\nvar r1 = foo();\nvar r2 = bar();",
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+    expect(code).not.toContain("function foo("); // tabled
+    expect(code).toContain("function bar"); // leaked via module.exports
+    expect(code).toContain("bar()"); // call NOT rewritten (bar not in table)
+    // Runtime: provide module to avoid ReferenceError
+    const ctx: Record<string, unknown> = { module: { exports: {} as unknown } };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r1"]).toBe(1);
+    expect(ctx["r2"]).toBe(2);
+  });
+
+  it("computed member export (exports[0] = fn) does not protect function (line 153)", () => {
+    // Line 153: isMemberExpression is true but property.type === 'Computed' → return false
+    // isExportsTarget returns false for exports[0], so foo is NOT leaked
+    const ast = parseSync(
+      "function foo() { return 1; }\nfunction bar() { return 2; }\nexports[0] = foo;\nfoo();\nbar();",
+      { syntax: "ecmascript" }
+    ) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).toMatch(/const _0x[0-9a-f\u0430\u0441\u0435]{16} = \[/);
+    expect(code).not.toContain("function foo("); // NOT leaked
+    expect(code).not.toContain("function bar(");
   });
 });
 
@@ -781,6 +956,34 @@ describe("stringPool", () => {
     expect(code).not.toContain('"world"');
     expect(() => parseSync(code, { syntax: "ecmascript", jsx: true })).not.toThrow();
   });
+
+  it("uses default options when called without seed argument", () => {
+    // Line 52: options = {} default parameter — masterSeed is randomly chosen
+    const ast = parseSync('var r = "hello world";', {
+      syntax: "ecmascript",
+    }) as unknown as SwcProgram;
+    applyStringPool(ast); // no options
+    const code = printSync(ast as any).code;
+    expect(code).not.toContain('"hello world"');
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe("hello world");
+  });
+
+  it("seed=25033 triggers entrySeed=0 normalization to 1 (line 69 || 1 branch)", () => {
+    // masterSeed=25033; entrySeed=(25033 + 1*40503) & 0xffff = 65536 & 0xffff = 0 → || 1 = 1
+    const ast = parseSync('var r = "trigger";', {
+      syntax: "ecmascript",
+    }) as unknown as SwcProgram;
+    applyStringPool(ast, { seed: 25033 });
+    const code = printSync(ast as any).code;
+    expect(code).not.toContain('"trigger"');
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe("trigger");
+  });
 });
 
 // ─── controlFlowFlattening ───────────────────────────────────────────────────
@@ -961,5 +1164,30 @@ describe("deadCode", () => {
     applyDeadCode(ast, { targetLines: 20 });
     expect((ast as any).body.length).toBeGreaterThan(before);
     expect((ast as any).body.length).toBeLessThan(before + 20);
+  });
+
+  it("uses default targetLines when called without options", () => {
+    // Line 352: options = {} default parameter
+    const code = parseAndApply(
+      "const a = 1; const b = 2; const c = 3;",
+      (ast) => applyDeadCode(ast) // no options
+    );
+    expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
+    // Default targetLines causes at least some injection
+    expect(code.split("\n").length).toBeGreaterThan(3);
+  });
+
+  it("skips arrow functions with expression bodies (non-BlockStatement)", () => {
+    // Line 370: !t.isBlockStatement(path.node.body) → early return in Phase 2
+    // Arrow 'x => x * 2' at top level is visited by the Function visitor;
+    // its body is an Expression (not BlockStatement) → returns early.
+    // Must NOT be nested inside another function (path.skip() would hide it).
+    const source = "var fn = x => x * 2; var r = fn(3);";
+    const code = parseAndApply(source, (ast) => applyDeadCode(ast, { targetLines: 5 }));
+    expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe(6);
   });
 });
