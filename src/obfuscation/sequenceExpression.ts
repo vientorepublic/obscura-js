@@ -40,7 +40,11 @@ export function applySequenceExpression(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const toSeq = (block: any): any => {
         const exprs = block.stmts.map((s: any) => s.expression); // eslint-disable-line @typescript-eslint/no-explicit-any
-        return exprs.length === 1 ? exprs[0] : t.sequenceExpression(exprs);
+        if (exprs.length === 1) return exprs[0];
+        // Wrap in ParenthesisExpression so the comma-operator sequence is
+        // always syntactically valid regardless of the enclosing context
+        // (ternary branch or && right-hand side).
+        return t.parenthesisExpression(t.sequenceExpression(exprs));
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
