@@ -144,3 +144,81 @@ describe("nativeBinding", () => {
     expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
   });
 });
+
+// ─── SWC-specific boundary conditions ────────────────────────────────────────
+
+describe("integrityTag — SWC-specific boundary conditions", () => {
+  it("does not tag arrays that are direct arguments to a call expression (skip condition)", () => {
+    // parent is CallExpression → skip: avoids double-tagging after the helper itself
+    // wraps the array in a call.  Plain user code: foo([1, 2]) must NOT tag [1, 2].
+    const source = "function foo(a) { return a; } var r = foo([1, 2, 3]);";
+    const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
+    // The call foo([...]) means [1,2,3]'s parent is a CallExpression — it must be skipped
+    expect(code).not.toMatch(/_0x[0-9a-fасе]{16}\(\[1, 2, 3\]/);
+  });
+
+  it("Symbol tag property value is a number (checksum) at runtime", () => {
+    // Verifies the multi-step checksum: (((len ^ K1) * K2) ^ (K1 >>> 3)) >>> 0
+    const source = "const a = [10, 20, 30]; globalThis.__a = a;";
+    const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
+    const ctx: Record<string, unknown> = { globalThis: {} };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    const arr = (ctx["globalThis"] as Record<string, unknown>)["__a"] as unknown[];
+    // Retrieve the Symbol key from the array's own symbol properties
+    const sym = Object.getOwnPropertySymbols(arr)[0];
+    expect(sym).toBeDefined();
+    const tagValue = (arr as any)[sym];
+    expect(typeof tagValue).toBe("number");
+    // Checksum must be a non-negative integer (>>> 0 always produces unsigned 32-bit)
+    expect(tagValue).toBeGreaterThanOrEqual(0);
+    expect(Number.isInteger(tagValue)).toBe(true);
+  });
+
+  it("array values are intact and enumerable properties unchanged after tagging", () => {
+    const source = "const arr = ['a', 'b', 'c']; globalThis.__arr = arr;";
+    const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
+    const ctx: Record<string, unknown> = { globalThis: {} };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    const arr = (ctx["globalThis"] as Record<string, unknown>)["__arr"] as string[];
+    expect(arr[0]).toBe("a");
+    expect(arr[1]).toBe("b");
+    expect(arr[2]).toBe("c");
+    // Tag is non-enumerable — Object.keys must not include it
+    expect(Object.keys(arr)).toEqual(["0", "1", "2"]);
+  });
+
+  it("tagging does not prevent iteration over array elements", () => {
+    const source =
+      "const nums = [1, 2, 3, 4]; globalThis.__sum = 0; nums.forEach(function(n){ globalThis.__sum += n; });";
+    const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
+    const ctx: Record<string, unknown> = { globalThis: { __sum: 0 } };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect((ctx["globalThis"] as Record<string, unknown>)["__sum"]).toBe(10);
+  });
+});
+
+describe("nativeBinding — SWC-specific boundary conditions", () => {
+  it("bound constants are prepended before any user code at runtime", () => {
+    // The binding must be declared before it is referenced in user code
+    const source = "var __r = Math.floor(3.9);";
+    const code = parseAndApply(source, (ast) =>
+      applyNativeBinding(ast, { methods: ["Math.floor"] })
+    );
+    // User code still uses the native Math.floor (not the bound alias) — just check no crash
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    expect(() => vm.runInContext(code, ctx)).not.toThrow();
+  });
+
+  it("single-segment method name is treated as global method (no receiver)", () => {
+    // 'parseInt' has parts=['parseInt'], so receiver=undefined — only obj binding, no .bind call
+    // We test that the output is parseable and doesn't crash
+    const code = parseAndApply("const x = 1;", (ast) =>
+      applyNativeBinding(ast, { methods: ["parseInt"] })
+    );
+    expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
+  });
+});

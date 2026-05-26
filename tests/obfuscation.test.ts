@@ -143,6 +143,39 @@ describe("mba", () => {
     expect(code).toContain('" world"');
     expect(code).not.toContain("^");
   });
+
+  // ─── SWC-specific: && / || are BinaryExpression, not LogicalExpression ──────
+
+  it("does not expand && operator (SWC BinaryExpression — not a valid MBA identity)", () => {
+    // In SWC, `a && b` parses as BinaryExpression{operator:"&&"}.
+    // MBA must only expand +, -, |, ^ — never logical operators.
+    const code = parseAndApply("const r = a && b;", (ast) => applyMba(ast, { rounds: 3 }));
+    expect(code).toContain("&&");
+    // Verify no spurious XOR/AND expansion of the operands introduced by MBA
+    expect(code).not.toMatch(/a \^ b/);
+    expect(code).not.toMatch(/a & b/);
+  });
+
+  it("does not expand || operator (SWC BinaryExpression — not a valid MBA identity)", () => {
+    const code = parseAndApply("const r = a || b;", (ast) => applyMba(ast, { rounds: 3 }));
+    expect(code).toContain("||");
+  });
+
+  it("does not expand ?? (nullish coalescing) operator", () => {
+    const code = parseAndApply("const r = a ?? b;", (ast) => applyMba(ast, { rounds: 1 }));
+    expect(code).toContain("??");
+  });
+
+  it("rounds=2 produces correct arithmetic result at runtime", () => {
+    const source = "var __r = 7 + 5;";
+    const code = parseAndApply(source, (ast) => applyMba(ast, { rounds: 2 }));
+    // Must not contain the original plain `+`
+    expect(code).not.toContain("7 + 5");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__r"]).toBe(12);
+  });
 });
 
 // ─── functionTable ───────────────────────────────────────────────────────────
@@ -256,6 +289,47 @@ describe("functionTable", () => {
     const code = printSync(ast as any).code;
     expect(code).toContain("function foo");
     expect(code).toMatch(/const _0x[0-9a-fасе]{16} = \[/); // bar gets tabled
+  });
+
+  // ─── SWC-specific: cross-function call rewriting ─────────────────────────
+
+  it("mutual recursion: cross-function calls are both rewritten and execute correctly", () => {
+    // Both isEven and isOdd reference each other — both must appear in the table
+    // and both call sites must be rewritten to indexed lookups.
+    const source = `
+      function isEven(n) { return n === 0 ? true : isOdd(n - 1); }
+      function isOdd(n) { return n === 0 ? false : isEven(n - 1); }
+      var __r = isEven(4);
+    `;
+    const ast = parseSync(source, { syntax: "ecmascript" }) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    // Neither original call site should survive
+    expect(code).not.toContain("isEven(");
+    expect(code).not.toContain("isOdd(");
+    // Runtime result must be correct
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__r"]).toBe(true);
+  });
+
+  it("call site inside another tabled function body is rewritten correctly", () => {
+    // greet() calls helper() — both tabled; the internal call must become a lookup
+    const source = `
+      function helper(name) { return "Hello " + name; }
+      function greet(name) { return helper(name); }
+      var __r = greet("world");
+    `;
+    const ast = parseSync(source, { syntax: "ecmascript" }) as unknown as SwcProgram;
+    applyFunctionTable(ast, { minFunctions: 1 });
+    const code = printSync(ast as any).code;
+    expect(code).not.toContain("helper(");
+    expect(code).not.toContain("greet(");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__r"]).toBe("Hello world");
   });
 });
 
@@ -486,6 +560,46 @@ describe("stringPool", () => {
     applyStringPool(ast, { seed: 42 });
     const code = printSync(ast as any).code;
     expect(code).toMatch(/as 'thing'|as "thing"/);
+  });
+
+  // ─── SWC-specific: {spread, expression} wrapper traversal ───────────────
+
+  it("encrypts a string literal inside a regular call expression argument (SWC wrapper)", () => {
+    // SWC: CallExpression.arguments = [{spread:null, expression: StringLiteral}]
+    // traverse must descend through the wrapper to find and replace the literal.
+    const source = 'var f = String; var r = f("wrapper-test");';
+    const code = parseAndApply(source, (ast) => applyStringPool(ast, { seed: 42 }));
+    expect(code).not.toContain('"wrapper-test"');
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r"]).toBe("wrapper-test");
+  });
+
+  it("encrypts a string literal inside an array expression element (SWC wrapper)", () => {
+    // SWC: ArrayExpression.elements = [{spread:null, expression: StringLiteral}]
+    const source = 'var r = ["elem-test"];';
+    const code = parseAndApply(source, (ast) => applyStringPool(ast, { seed: 42 }));
+    expect(code).not.toContain('"elem-test"');
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect((ctx["r"] as string[])[0]).toBe("elem-test");
+  });
+
+  it("encrypts a string inside an array that is a call argument (doubly-nested SWC wrappers)", () => {
+    // String is inside ArrayExpression element wrapper, inside CallExpression argument wrapper.
+    // This exercises two levels of {spread, expression} traversal.
+    const source = `
+      function first(arr) { return arr[0]; }
+      var __r = first(["nested-elem"]);
+    `;
+    const code = parseAndApply(source, (ast) => applyStringPool(ast, { seed: 55 }));
+    expect(code).not.toContain('"nested-elem"');
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__r"]).toBe("nested-elem");
   });
 
   it("preserves ES2022 import specifier string names", () => {
@@ -735,6 +849,72 @@ describe("controlFlowFlattening", () => {
     const code = parseAndApply(source, (ast) => applyControlFlowFlattening(ast, { passes: 2 }));
     const switchCount = [...code.matchAll(/\bswitch\b/g)].length;
     expect(switchCount).toBeGreaterThanOrEqual(2);
+  });
+
+  // ─── SWC-specific: let/const hoisting and runtime correctness ────────────
+
+  it("hoists let/const across cases and variables remain accessible at runtime", () => {
+    // CFF converts 'let a = ...; let b = a * 2; return b;' into a switch state machine.
+    // Each 'let'/'const' is extracted to a 'var' declarator so it is accessible
+    // across all cases — this is the Babel→SWC hoisting migration requirement.
+    const source = `
+      function compute(x) {
+        let a = x + 1;
+        let b = a * 2;
+        return b;
+      }
+      var __r = compute(3);
+    `;
+    const code = parseAndApply(source, (ast) => applyControlFlowFlattening(ast));
+    expect(code).toContain("switch");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__r"]).toBe(8); // (3+1)*2 = 8
+  });
+
+  it("preserves the return value of a flattened function at runtime", () => {
+    const source = `
+      function add(a, b) {
+        const x = a + b;
+        const y = x * 2;
+        return y;
+      }
+      var __r = add(3, 4);
+    `;
+    const code = parseAndApply(source, (ast) => applyControlFlowFlattening(ast));
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__r"]).toBe(14); // (3+4)*2 = 14
+  });
+
+  it("hoists a let declaration with no initializer (let x;) without crashing", () => {
+    // extractHoisted must return EmptyStatement for init-less declarations.
+    // The case body must skip the EmptyStatement and only include the state update.
+    const source = "function f() { let x; x = 5; return x; }";
+    const code = parseAndApply(source, (ast) => applyControlFlowFlattening(ast));
+    expect(code).toContain("switch");
+    expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    // Must not throw at runtime — the var declaration is valid even without init
+    expect(() => vm.runInContext(code, ctx)).not.toThrow();
+  });
+
+  it("flattened function with multiple parameters executes correctly", () => {
+    const source = `
+      function clamp(val, lo, hi) {
+        const r = val < lo ? lo : val > hi ? hi : val;
+        return r;
+      }
+      var __r = clamp(15, 0, 10);
+    `;
+    const code = parseAndApply(source, (ast) => applyControlFlowFlattening(ast));
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__r"]).toBe(10);
   });
 });
 
