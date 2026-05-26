@@ -37,8 +37,15 @@ export function applyIntegrityTag(ast: SwcProgram, options: IntegrityTagOptions 
 
   traverse(ast, {
     ArrayExpression(path) {
-      // Skip if already tagged or inside the helper declarations
-      if (t.isCallExpression(path.parent)) return;
+      // Skip only if this array is already inside a _0xTag(...) call — i.e. it is the
+      // deep-cloned original inside the wrapper we just emitted.  Any other call site
+      // (user code: foo([1,2,3])) must still be tagged.
+      if (
+        t.isCallExpression(path.parent) &&
+        t.isIdentifier((path.parent as any).callee) && // eslint-disable-line @typescript-eslint/no-explicit-any
+        (path.parent as any).callee.value === tagFn // eslint-disable-line @typescript-eslint/no-explicit-any
+      )
+        return;
 
       // Multi-step checksum: mix element count with two random constants
       const len = path.node.elements.length;

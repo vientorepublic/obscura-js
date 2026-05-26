@@ -148,13 +148,15 @@ describe("nativeBinding", () => {
 // ─── SWC-specific boundary conditions ────────────────────────────────────────
 
 describe("integrityTag — SWC-specific boundary conditions", () => {
-  it("does not tag arrays that are direct arguments to a call expression (skip condition)", () => {
-    // parent is CallExpression → skip: avoids double-tagging after the helper itself
-    // wraps the array in a call.  Plain user code: foo([1, 2]) must NOT tag [1, 2].
+  it("tags arrays that are direct arguments to a call expression (only _0xTag internals are skipped)", () => {
+    // After the skip-condition fix: foo([1,2,3]) → foo(_0xTag([1,2,3], cs))
+    // Only the already-cloned array inside _0xTag(...) itself is excluded.
     const source = "function foo(a) { return a; } var r = foo([1, 2, 3]);";
     const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
-    // The call foo([...]) means [1,2,3]'s parent is a CallExpression — it must be skipped
-    expect(code).not.toMatch(/_0x[0-9a-fасе]{16}\(\[1, 2, 3\]/);
+    // The array in the call argument IS now tagged — the tag helper wraps it
+    expect(code).toMatch(/_0x[0-9a-fасе]{16}\(\[/);
+    // Output remains valid
+    expect(() => parseSync(code, { syntax: "ecmascript" })).not.toThrow();
   });
 
   it("Symbol tag property value is a number (checksum) at runtime", () => {
@@ -201,13 +203,42 @@ describe("integrityTag — SWC-specific boundary conditions", () => {
 });
 
 describe("nativeBinding — SWC-specific boundary conditions", () => {
+  it("replaces Math.floor(x) call sites with the bound constant identifier", () => {
+    const source = "var r = Math.floor(3.9);";
+    const code = parseAndApply(source, (ast) =>
+      applyNativeBinding(ast, { methods: ["Math.floor"] })
+    );
+    // The call site must use the bound alias, not the original MemberExpression
+    expect(code).not.toContain("Math.floor(");
+    // Bound declaration is still present
+    expect(code).toContain("Math.floor.bind(Math)");
+    // Correct result at runtime
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    expect(() => vm.runInContext(code, ctx)).not.toThrow();
+  });
+
+  it("replaces multiple call sites for different bound methods", () => {
+    const source = "var a = Math.floor(1.9); var b = Object.keys({x:1});";
+    const code = parseAndApply(source, (ast) =>
+      applyNativeBinding(ast, { methods: ["Math.floor", "Object.keys"] })
+    );
+    expect(code).not.toContain("Math.floor(");
+    expect(code).not.toContain("Object.keys(");
+    expect(code).toContain("Math.floor.bind(Math)");
+    expect(code).toContain("Object.keys.bind(Object)");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    expect(() => vm.runInContext(code, ctx)).not.toThrow();
+  });
+
   it("bound constants are prepended before any user code at runtime", () => {
     // The binding must be declared before it is referenced in user code
     const source = "var __r = Math.floor(3.9);";
     const code = parseAndApply(source, (ast) =>
       applyNativeBinding(ast, { methods: ["Math.floor"] })
     );
-    // User code still uses the native Math.floor (not the bound alias) — just check no crash
+    // Call site replaced; bound alias is used
     const ctx: Record<string, unknown> = {};
     vm.createContext(ctx);
     expect(() => vm.runInContext(code, ctx)).not.toThrow();
