@@ -1,5 +1,5 @@
-import traverse from "@babel/traverse";
-import * as t from "@babel/types";
+import { traverse, t } from "../swc-utils";
+import type { SwcProgram } from "../swc-utils";
 import type { DeadCodeOptions } from "../types";
 
 /** Generate a random hex identifier that looks like obfuscated code */
@@ -49,7 +49,8 @@ function pickConst(): number {
  * is provably unreachable. Conditions require multi-step static analysis to
  * verify — they cannot be detected by naive pattern matching alone.
  */
-const DEAD_TEMPLATES: (() => t.Statement)[] = [
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const DEAD_TEMPLATES: (() => any)[] = [
   // T1: Bitmask computation — condition checks for a value that was never produced
   // { var _mask_XXX = (A & B) ^ C;  if (_mask_XXX === computed+0x1337) { ... } }
   () => {
@@ -305,33 +306,35 @@ const DEAD_TEMPLATES: (() => t.Statement)[] = [
     const k = pickConst() >>> 0;
     return t.expressionStatement(
       t.callExpression(
-        t.functionExpression(
-          t.identifier(fnId),
-          [],
-          t.blockStatement([
-            t.variableDeclaration("var", [
-              t.variableDeclarator(t.identifier(resId), t.numericLiteral(seed)),
-            ]),
-            t.expressionStatement(
-              t.assignmentExpression(
-                "^=",
-                t.identifier(resId),
-                t.binaryExpression(">>>", t.identifier(resId), t.numericLiteral(16))
-              )
-            ),
-            t.expressionStatement(
-              t.assignmentExpression(
-                "=",
-                t.identifier(resId),
-                t.binaryExpression(
-                  ">>>",
-                  t.binaryExpression("*", t.identifier(resId), t.numericLiteral(k)),
-                  t.numericLiteral(0)
+        t.parenthesizedExpression(
+          t.functionExpression(
+            t.identifier(fnId),
+            [],
+            t.blockStatement([
+              t.variableDeclaration("var", [
+                t.variableDeclarator(t.identifier(resId), t.numericLiteral(seed)),
+              ]),
+              t.expressionStatement(
+                t.assignmentExpression(
+                  "^=",
+                  t.identifier(resId),
+                  t.binaryExpression(">>>", t.identifier(resId), t.numericLiteral(16))
                 )
-              )
-            ),
-            t.returnStatement(t.identifier(resId)),
-          ])
+              ),
+              t.expressionStatement(
+                t.assignmentExpression(
+                  "=",
+                  t.identifier(resId),
+                  t.binaryExpression(
+                    ">>>",
+                    t.binaryExpression("*", t.identifier(resId), t.numericLiteral(k)),
+                    t.numericLiteral(0)
+                  )
+                )
+              ),
+              t.returnStatement(t.identifier(resId)),
+            ])
+          )
         ),
         []
       )
@@ -346,9 +349,9 @@ const DEAD_TEMPLATES: (() => t.Statement)[] = [
  * inside function bodies to inflate file size and confuse static analysis.
  * Templates use opaque predicates requiring multi-step analysis to refute.
  */
-export function applyDeadCode(ast: t.File, options: DeadCodeOptions = {}): void {
+export function applyDeadCode(ast: SwcProgram, options: DeadCodeOptions = {}): void {
   const targetLines = options.targetLines ?? 50;
-  const body = ast.program.body as t.Statement[];
+  const body = ast.body as any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
 
   // Phase 1: inject into the top-level program body
   let injected = 0;
@@ -365,7 +368,8 @@ export function applyDeadCode(ast: t.File, options: DeadCodeOptions = {}): void 
   traverse(ast, {
     Function(path) {
       if (!t.isBlockStatement(path.node.body)) return;
-      const fnBody = path.node.body.body;
+      // SWC BlockStatement uses .stmts (not .body)
+      const fnBody: any[] = path.node.body.stmts; // eslint-disable-line @typescript-eslint/no-explicit-any
       // Only inject into non-trivial functions
       if (fnBody.length < 2) return;
 

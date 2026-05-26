@@ -1,5 +1,5 @@
-import traverse from "@babel/traverse";
-import * as t from "@babel/types";
+import { traverse, t } from "../swc-utils";
+import type { SwcProgram } from "../swc-utils";
 import type { ControlFlowFlatteningOptions } from "../types";
 import { genId } from "../genId";
 
@@ -12,47 +12,44 @@ import { genId } from "../genId";
  * Before:
  *   function f() { stmt0; stmt1; stmt2; }
  *
- * After:
+ * After (case numbers and initial state are randomly shuffled):
  *   function f() {
- *     let __s = 0;
+ *     let __s = <rand>;          // initial state = stateNums[0] after Fisher-Yates shuffle
  *     while (true) {
  *       switch (__s) {
- *         case 0: stmt0; __s = 1; break;
- *         case 1: stmt1; __s = 2; break;
- *         case 2: stmt2; __s = -1; break;
+ *         case <r0>: stmt0; __s = <r1>; break;
+ *         case <r1>: stmt1; __s = <r2>; break;
+ *         case <r2>: stmt2; __s = -1;  break;
  *         default: return;
  *       }
  *     }
  *   }
  */
 export function applyControlFlowFlattening(
-  ast: t.File,
+  ast: SwcProgram,
   options: ControlFlowFlatteningOptions = {}
 ): void {
   const passes = options.passes ?? 1;
-  const stateVar = genId();
 
   /**
    * If `stmt` is a let/const VariableDeclaration, extract the declarators into
    * `hoisted` (as var-declared names only) and return ExpressionStatements for
    * the assignments, so variables are function-scoped and accessible across cases.
-   * Returns null for declarators that have no initializer.
+   * Returns an EmptyStatement for declarations that have no initializer.
    */
-  function extractHoisted(stmt: t.Statement, hoisted: t.VariableDeclarator[]): t.Statement {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function extractHoisted(stmt: any, hoisted: any[]): any {
     if (!t.isVariableDeclaration(stmt) || (stmt.kind !== "let" && stmt.kind !== "const")) {
       return t.cloneNode(stmt, true);
     }
-    const assignments: t.Expression[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const assignments: any[] = [];
     for (const decl of stmt.declarations) {
       // Hoist: var name; (or var { a, b };)
       hoisted.push(t.variableDeclarator(t.cloneNode(decl.id, true)));
       if (decl.init) {
         assignments.push(
-          t.assignmentExpression(
-            "=",
-            t.cloneNode(decl.id, true) as t.LVal,
-            t.cloneNode(decl.init, true)
-          )
+          t.assignmentExpression("=", t.cloneNode(decl.id, true), t.cloneNode(decl.init, true))
         );
       }
     }
@@ -66,13 +63,17 @@ export function applyControlFlowFlattening(
       Function(path) {
         if (!t.isBlockStatement(path.node.body)) return;
 
-        const body = path.node.body.body;
+        // SWC BlockStatement uses .stmts (not .body)
+        const body: any[] = path.node.body.stmts; // eslint-disable-line @typescript-eslint/no-explicit-any
 
         // Skip trivial or already-flattened bodies
         if (body.length <= 1) return;
-        if (body.some((s) => t.isSwitchStatement(s))) return;
+        if (body.some((s: any) => t.isSwitchStatement(s))) return; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-        const hoisted: t.VariableDeclarator[] = [];
+        // Fresh ID per function per pass — avoids collisions when passes>1
+        const stateVar = genId();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const hoisted: any[] = [];
 
         // Fisher-Yates shuffle to assign random case numbers (not sequential)
         const stateNums = Array.from({ length: body.length }, (_, i) => i);
@@ -81,13 +82,15 @@ export function applyControlFlowFlattening(
           [stateNums[i], stateNums[j]] = [stateNums[j], stateNums[i]];
         }
 
-        const cases = body.map((stmt, stepIdx) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cases = body.map((stmt: any, stepIdx: number) => {
           const actualState = stateNums[stepIdx];
           const nextActual = stepIdx === body.length - 1 ? -1 : stateNums[stepIdx + 1];
           const nextState = t.numericLiteral(nextActual);
           const converted = extractHoisted(stmt, hoisted);
 
-          const caseBody: t.Statement[] = [];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const caseBody: any[] = [];
           if (!t.isEmptyStatement(converted)) caseBody.push(converted);
           caseBody.push(
             t.expressionStatement(t.assignmentExpression("=", t.identifier(stateVar), nextState)),
@@ -104,7 +107,8 @@ export function applyControlFlowFlattening(
           t.blockStatement([t.switchStatement(t.identifier(stateVar), cases)])
         );
 
-        const prelude: t.Statement[] = [
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const prelude: any[] = [
           t.variableDeclaration("let", [
             t.variableDeclarator(t.identifier(stateVar), t.numericLiteral(stateNums[0])),
           ]),

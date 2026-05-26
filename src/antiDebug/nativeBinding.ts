@@ -1,6 +1,26 @@
-import * as t from "@babel/types";
+import { traverse, t } from "../swc-utils";
+import type { SwcProgram } from "../swc-utils";
 import type { NativeBindingOptions } from "../types";
 import { genId } from "../genId";
+
+/**
+ * Returns the dotted member path for a MemberExpression or Identifier, or
+ * null if it cannot be resolved statically (computed key, non-identifier leaf).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getMemberDotPath(node: any): string | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (t.isIdentifier(node)) return (node as any).value ?? null;
+  if (!t.isMemberExpression(node)) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((node as any).property?.type === "Computed") return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const obj = getMemberDotPath((node as any).object);
+  if (!obj) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const prop = t.isIdentifier((node as any).property) ? (node as any).property.value : null;
+  return prop ? `${obj}.${prop}` : null;
+}
 
 /** Default set of native methods to pre-bind */
 const DEFAULT_METHODS = [
@@ -25,33 +45,32 @@ const DEFAULT_METHODS = [
  *   const __obscura_Math_floor = Math.floor.bind(Math);
  *   const __obscura_Math_random = Math.random.bind(Math);
  */
-export function applyNativeBinding(ast: t.File, options: NativeBindingOptions = {}): void {
+export function applyNativeBinding(ast: SwcProgram, options: NativeBindingOptions = {}): void {
   const methods = options.methods ?? DEFAULT_METHODS;
 
-  const declarations: t.VariableDeclaration[] = methods.map((methodPath) => {
+  // Map: dotted method path (e.g. "Math.floor") → generated const identifier name
+  const methodToConst = new Map<string, string>();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const declarations: any[] = methods.map((methodPath) => {
     const parts = methodPath.split(".");
     // receiver is the object before the last segment (e.g. Math for Math.floor)
     const receiverPath = parts.slice(0, -1).join(".");
     const constName = genId();
+    methodToConst.set(methodPath, constName);
 
     // Build member expression: Math.floor
-    const memberExpr = parts.reduce<t.Expression>(
-      (acc, part) => t.memberExpression(acc, t.identifier(part)),
-      t.identifier(parts[0])
-    );
-    // Actually rebuild correctly:
-    let obj: t.Expression = t.identifier(parts[0]);
+    let obj: any = t.identifier(parts[0]); // eslint-disable-line @typescript-eslint/no-explicit-any
     for (let i = 1; i < parts.length; i++) {
       obj = t.memberExpression(obj, t.identifier(parts[i]));
     }
 
     // receiver expression (e.g. Math, Array.prototype)
-    let receiver: t.Expression = t.identifier(parts[0]);
+    let receiver: any = t.identifier(parts[0]); // eslint-disable-line @typescript-eslint/no-explicit-any
     for (let i = 1; i < parts.length - 1; i++) {
       receiver = t.memberExpression(receiver, t.identifier(parts[i]));
     }
 
-    void memberExpr; // suppress unused warning — we use `obj` instead
     void receiverPath;
 
     // <method>.bind(<receiver>)
@@ -62,5 +81,21 @@ export function applyNativeBinding(ast: t.File, options: NativeBindingOptions = 
     ]);
   });
 
-  (ast.program.body as t.Statement[]).unshift(...declarations);
+  (ast.body as any[]).unshift(...declarations); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  // Replace direct call sites: Math.floor(x) → _0xConst(x)
+  // This ensures user code actually uses the pre-bound reference instead of
+  // the monkey-patchable original — without this, the bindings are dead code.
+  if (methodToConst.size > 0) {
+    traverse(ast, {
+      CallExpression(path) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dotted = getMemberDotPath((path.node as any).callee);
+        if (dotted !== null && methodToConst.has(dotted)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (path.node as any).callee = t.identifier(methodToConst.get(dotted)!);
+        }
+      },
+    });
+  }
 }

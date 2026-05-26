@@ -1,6 +1,6 @@
 {
   "name": "obscura-js",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "JavaScript code protection tool — obfuscation & anti-debugging inspired by Google reCAPTCHA",
   "type": "commonjs",
   "main": "dist/src/index.js",
@@ -45,7 +45,7 @@
     "anti-tamper",
     "code-protection",
     "ast",
-    "babel"
+    "swc"
   ],
   "repository": {
     "type": "git",
@@ -61,17 +61,10 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@babel/core": "^7.24.0",
-    "@babel/generator": "^7.24.0",
-    "@babel/parser": "^7.24.0",
-    "@babel/traverse": "^7.24.0",
-    "@babel/types": "^7.24.0",
+    "@swc/core": "^1.15.40",
     "commander": "^12.0.0"
   },
   "devDependencies": {
-    "@types/babel__core": "^7.20.5",
-    "@types/babel__generator": "^7.6.8",
-    "@types/babel__traverse": "^7.20.6",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.12.0",
     "@typescript-eslint/eslint-plugin": "^8.59.4",

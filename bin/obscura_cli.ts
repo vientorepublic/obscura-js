@@ -4,6 +4,7 @@ import { resolve, basename } from "path";
 import { Command } from "commander";
 import { protect } from "../src/index";
 import type { ObscuraOptions } from "../src/types";
+import { version as pkgVersion } from "../package.json";
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 // Respect NO_COLOR (https://no-color.org) and FORCE_COLOR env vars.
@@ -141,7 +142,7 @@ const program = new Command();
 program
   .name("obscura-js")
   .description("JavaScript code protection tool — obfuscation & anti-debugging")
-  .version("1.2.0");
+  .version(pkgVersion);
 
 program
   .command("protect <input>")
