@@ -356,6 +356,17 @@ export const t = {
     return { type: "SequenceExpression", span: DUMMY_SPAN, expressions };
   },
 
+  /**
+   * Wraps an expression in explicit parentheses.
+   * Required when placing a SequenceExpression (comma operator) inside a
+   * ConditionalExpression branch or as the right operand of &&/||, because
+   * the comma operator has lower precedence and SWC's printer does not
+   * automatically insert parentheses in those positions.
+   */
+  parenthesisExpression(expression: AnyNode): AnyNode {
+    return { type: "ParenthesisExpression", span: DUMMY_SPAN, expression };
+  },
+
   conditionalExpression(test: AnyNode, consequent: AnyNode, alternate: AnyNode): AnyNode {
     return { type: "ConditionalExpression", span: DUMMY_SPAN, test, consequent, alternate };
   },
