@@ -410,3 +410,162 @@ describe("E2E — CFF passes=2", () => {
     expect(exports_(run(code))).toBe(6); // (4+1)*2 - 4 = 6
   });
 });
+
+// ─── sequenceExpression operator-precedence regressions ────────────────────────
+
+describe("E2E — sequenceExpression operator-precedence", () => {
+  it("regression: single-assignment body executes correctly (oauth2.js pattern)", () => {
+    // Before the fix: `cond && continueMenu = false` was emitted as-is,
+    // which is a runtime SyntaxError because `&&` binds tighter than `=`.
+    const source = `
+      var continueMenu = true;
+      if ("n".toLowerCase() !== "y") { continueMenu = false; }
+      module.exports = continueMenu;
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        sequenceExpression: { probability: 1 },
+        mba: false,
+        functionTable: false,
+        stringPool: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(exports_(run(code))).toBe(false);
+  });
+
+  it("|| compound test: all four truthiness combinations are correct", () => {
+    // `if (a || b)` must emit `(a || b) && (...)`, not `a || b && (...)`.
+    const source = `
+      var r = [0, 0, 0, 0];
+      var F = false, T = true;
+      if (F || F) { r[0] = 1; }
+      if (F || T) { r[1] = 1; }
+      if (T || F) { r[2] = 1; }
+      if (T || T) { r[3] = 1; }
+      module.exports = r;
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        sequenceExpression: { probability: 1 },
+        mba: false,
+        functionTable: false,
+        stringPool: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    const result = exports_(run(code)) as number[];
+    expect(result).toEqual([0, 1, 1, 1]);
+  });
+
+  it("ternary test: correct branch chosen when test is a ConditionalExpression", () => {
+    // `if (a ? b : c)` must emit `(a ? b : c) && (...)`.
+    // Without the fix: `a ? b : c && (x=1)` parses as `a ? b : (c && (x=1))`.
+    const source = `
+      var r1 = 0; var r2 = 0;
+      if (true ? true : false) { r1 = 1; }
+      if (true ? false : true) { r2 = 1; }
+      module.exports = [r1, r2];
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        sequenceExpression: { probability: 1 },
+        mba: false,
+        functionTable: false,
+        stringPool: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    const result = exports_(run(code)) as number[];
+    expect(result).toEqual([1, 0]);
+  });
+
+  it("if-else with || test: correct branch is chosen in ternary form", () => {
+    // `if (a || b) { x=1; } else { x=2; }` → `a || b ? (x=1) : (x=2)`.
+    // `||` binds tighter than `?:`, so this is already correct without extra parens;
+    // but we must still verify runtime correctness.
+    const source = `
+      var r; var F = false, T = true;
+      if (F || F) { r = "yes"; } else { r = "no"; }
+      module.exports = r;
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        sequenceExpression: { probability: 1 },
+        mba: false,
+        functionTable: false,
+        stringPool: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(exports_(run(code))).toBe("no");
+  });
+
+  it("sequenceExpression + MBA: && from flattened if is not expanded by MBA", () => {
+    // MBA must only expand +, -, |, ^ — never the `&&` emitted by sequenceExpression.
+    // Run order: sequenceExpression → MBA.  MBA sees `BinaryExpression{&&}` which
+    // it must skip.  If it incorrectly expanded `&&`, the runtime result would differ.
+    const source = `
+      var x = 0;
+      if (true) { x = 3 + 4; }
+      module.exports = x;
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        sequenceExpression: { probability: 1 },
+        mba: { rounds: 2 },
+        functionTable: false,
+        stringPool: false,
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    // The && guard must survive; the 3+4 inside the body is expanded by MBA
+    expect(code).toContain("&&");
+    expect(exports_(run(code))).toBe(7);
+  });
+
+  it("sequenceExpression + stringPool: string comparison in condition still works", () => {
+    // After sequenceExpression runs, stringPool encrypts string literals in the
+    // flattened expressions.  The comparison must still produce the correct result.
+    const source = `
+      var answer = "y";
+      var continueMenu = true;
+      if (answer.toLowerCase() !== "y") { continueMenu = false; }
+      module.exports = continueMenu;
+    `;
+    const { code } = protect(source, {
+      obfuscation: {
+        sequenceExpression: { probability: 1 },
+        mba: false,
+        functionTable: false,
+        stringPool: { seed: 42 },
+        controlFlowFlattening: false,
+        deadCode: false,
+      },
+      antiDebug: { nativeBinding: false, integrityTag: false },
+    });
+    expect(exports_(run(code))).toBe(true); // "y" === "y", so body not executed
+  });
+
+  it("full pipeline preserves the oauth2.js continueMenu pattern end-to-end", () => {
+    // The original failure scenario from oauth2.js obfuscation.
+    const source = `
+      var continueMenu = true;
+      if ("n".toLowerCase() !== "y") { continueMenu = false; }
+      module.exports = continueMenu;
+    `;
+    const { code } = protect(source);
+    expect(() => run(code)).not.toThrow();
+    expect(exports_(run(code))).toBe(false);
+  });
+});

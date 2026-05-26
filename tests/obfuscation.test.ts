@@ -98,6 +98,171 @@ describe("sequenceExpression", () => {
     expect(code).toContain("else");
     expect(code).toContain("let");
   });
+
+  // ─── runtime correctness & operator-precedence ───────────────────────────
+
+  it("regression: single assignment in consequent executes correctly (oauth2.js pattern)", () => {
+    // Original bug: `cond && x = v` was emitted, which is a SyntaxError because
+    // `&&` binds tighter than `=` — the LHS `(cond && x)` is not assignable.
+    // Fix: single-expression bodies are wrapped in ParenthesisExpression.
+    const source = `
+      var continueMenu = true;
+      if ("n".toLowerCase() !== "y") { continueMenu = false; }
+      var __r = continueMenu;
+    `;
+    const code = parseAndApply(source, (ast) => applySequenceExpression(ast, { probability: 1 }));
+    // Must not contain an `if` statement — it was flattened
+    expect(code).not.toContain("if (");
+    // The assignment must be parenthesised: && (continueMenu = false)
+    expect(code).toContain("(continueMenu = false)");
+    // Runtime: the assignment must actually execute
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__r"]).toBe(false);
+  });
+
+  it("if with || compound test: body executes when either operand is truthy", () => {
+    // `if (a || b)` → `(a || b) && (x = 1)`.
+    // Without the wrapTest fix, `||` inside `&&` emits `a || b && (x=1)` which
+    // parses as `a || (b && (x=1))` — only half the expected cases set x.
+    const source = `
+      var x1 = 0; var x2 = 0; var x3 = 0; var x4 = 0;
+      var F = false, T = true;
+      if (F || F) { x1 = 1; }
+      if (F || T) { x2 = 1; }
+      if (T || F) { x3 = 1; }
+      if (T || T) { x4 = 1; }
+    `;
+    const code = parseAndApply(source, (ast) => applySequenceExpression(ast, { probability: 1 }));
+    expect(code).not.toContain("if (");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["x1"]).toBe(0); // F||F → body not executed
+    expect(ctx["x2"]).toBe(1); // F||T → body executed
+    expect(ctx["x3"]).toBe(1); // T||F → body executed
+    expect(ctx["x4"]).toBe(1); // T||T → body executed
+  });
+
+  it("if with ?? compound test: body executes when left operand is nullish", () => {
+    // `if (a ?? b)` → `(a ?? b) && (x = 1)` — `??` must be wrapped like `||`.
+    const source = `
+      var x1 = 0; var x2 = 0;
+      var n = null;
+      if (n ?? true) { x1 = 1; }
+      if (n ?? false) { x2 = 1; }
+    `;
+    const code = parseAndApply(source, (ast) => applySequenceExpression(ast, { probability: 1 }));
+    expect(code).not.toContain("if (");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["x1"]).toBe(1); // null ?? true → true → executed
+    expect(ctx["x2"]).toBe(0); // null ?? false → false → not executed
+  });
+
+  it("if with ternary test: body executes correctly (ConditionalExpression wrapped)", () => {
+    // `if (a ? b : c)` → `(a ? b : c) && (x = 1)`.
+    // Without fix: `a ? b : c && (x=1)` parses as `a ? b : (c && (x=1))` — always wrong.
+    const source = `
+      var r1 = 0; var r2 = 0;
+      if (true ? true : false) { r1 = 1; }
+      if (true ? false : true) { r2 = 1; }
+    `;
+    const code = parseAndApply(source, (ast) => applySequenceExpression(ast, { probability: 1 }));
+    expect(code).not.toContain("if (");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["r1"]).toBe(1); // true ? true : false → true → executed
+    expect(ctx["r2"]).toBe(0); // true ? false : true → false → not executed
+  });
+
+  it("if with || test correctly wraps the test node (structural check)", () => {
+    // The emitted code must contain `(a || b) &&`, not `a || b &&`.
+    const code = parseAndApply("if (a || b) { x = 1; }", (ast) =>
+      applySequenceExpression(ast, { probability: 1 })
+    );
+    expect(code).toMatch(/\(a \|\| b\) &&/);
+  });
+
+  it("if with ternary test correctly wraps the test node (structural check)", () => {
+    const code = parseAndApply("if (a ? b : c) { x = 1; }", (ast) =>
+      applySequenceExpression(ast, { probability: 1 })
+    );
+    expect(code).toMatch(/\(a \? b : c\) &&/);
+  });
+
+  it("if-else with || test: correct branch chosen based on truthiness", () => {
+    // `if (a || b) { x=1; } else { x=2; }` → `a || b ? (x=1) : (x=2)`.
+    // `||` binds tighter than `?:` so no extra parens are needed — but the
+    // result must still be semantically correct.
+    const source = `
+      var x1; var x2; var x3;
+      var F = false, T = true;
+      if (F || F) { x1 = "yes"; } else { x1 = "no"; }
+      if (F || T) { x2 = "yes"; } else { x2 = "no"; }
+      if (T || F) { x3 = "yes"; } else { x3 = "no"; }
+    `;
+    const code = parseAndApply(source, (ast) => applySequenceExpression(ast, { probability: 1 }));
+    expect(code).not.toContain("if (");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["x1"]).toBe("no");
+    expect(ctx["x2"]).toBe("yes");
+    expect(ctx["x3"]).toBe("yes");
+  });
+
+  it("if-else single-assignment both branches: correct value assigned at runtime", () => {
+    // Both branches are single assignments — both must be wrapped in parens for
+    // the ternary form: `cond ? (a = 1) : (a = 2)`.
+    const source = `
+      var a;
+      if (false) { a = 1; } else { a = 2; }
+      var __r = a;
+    `;
+    const code = parseAndApply(source, (ast) => applySequenceExpression(ast, { probability: 1 }));
+    expect(code).not.toContain("if (");
+    expect(code).toContain("(a = 2)");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__r"]).toBe(2);
+  });
+
+  it("property assignment in single-statement body executes correctly", () => {
+    // `if (f) { obj.prop = 42; }` — `obj.prop = 42` is an AssignmentExpression
+    // targeting a MemberExpression; must be wrapped: `f && (obj.prop = 42)`.
+    const source = `
+      var obj = { prop: 0 };
+      if (true) { obj.prop = 42; }
+      var __r = obj.prop;
+    `;
+    const code = parseAndApply(source, (ast) => applySequenceExpression(ast, { probability: 1 }));
+    expect(code).not.toContain("if (");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__r"]).toBe(42);
+  });
+
+  it("multi-statement consequent with || test executes all statements correctly", () => {
+    // Compound test + multi-statement body: `(a || b) && (s1, s2)`
+    const source = `
+      var x = 0; var y = 0;
+      if (true || false) { x = 10; y = 20; }
+      var __x = x; var __y = y;
+    `;
+    const code = parseAndApply(source, (ast) => applySequenceExpression(ast, { probability: 1 }));
+    expect(code).not.toContain("if (");
+    const ctx: Record<string, unknown> = {};
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    expect(ctx["__x"]).toBe(10);
+    expect(ctx["__y"]).toBe(20);
+  });
 });
 
 // ─── mba ─────────────────────────────────────────────────────────────────────
