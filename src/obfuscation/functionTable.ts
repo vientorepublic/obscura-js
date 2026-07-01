@@ -32,10 +32,9 @@ export function applyFunctionTable(ast: SwcProgram, options: FunctionTableOption
     ExportNamedDeclaration(path) {
       if ((path.node as any).source) return; // re-export from another file — no local binding // eslint-disable-line @typescript-eslint/no-explicit-any
       for (const spec of (path.node as any).specifiers ?? []) {
-        // eslint-disable-line @typescript-eslint/no-explicit-any
         if (t.isExportSpecifier(spec)) {
           // SWC ExportSpecifier uses .orig (not .local)
-          const orig = (spec as any).orig; // eslint-disable-line @typescript-eslint/no-explicit-any
+          const orig = (spec as any).orig;
           if (orig && orig.type === "Identifier") {
             leakedNames.add(orig.value);
           }
@@ -45,7 +44,7 @@ export function applyFunctionTable(ast: SwcProgram, options: FunctionTableOption
     // ESM: export default foo  (identifier, not an inline declaration)
     ExportDefaultExpression(path) {
       // SWC uses ExportDefaultExpression.expression for identifier exports
-      const expr = (path.node as any).expression ?? (path.node as any).decl; // eslint-disable-line @typescript-eslint/no-explicit-any
+      const expr = (path.node as any).expression ?? (path.node as any).decl;
       if (expr && expr.type === "Identifier") {
         leakedNames.add(expr.value);
       }
@@ -56,16 +55,14 @@ export function applyFunctionTable(ast: SwcProgram, options: FunctionTableOption
       const { left, right } = path.node;
       if (!isExportsTarget(left)) return;
       if (t.isIdentifier(right)) {
-        leakedNames.add((right as any).value); // eslint-disable-line @typescript-eslint/no-explicit-any
+        leakedNames.add((right as any).value);
       } else if (t.isObjectExpression(right)) {
         for (const prop of (right as any).properties ?? []) {
-          // eslint-disable-line @typescript-eslint/no-explicit-any
           // SWC shorthand { foo } → Identifier node directly in properties[]
           if (t.isIdentifier(prop)) {
-            leakedNames.add((prop as any).value); // eslint-disable-line @typescript-eslint/no-explicit-any
+            leakedNames.add((prop as any).value);
           } else if (t.isObjectProperty(prop) && t.isIdentifier((prop as any).value)) {
-            // eslint-disable-line @typescript-eslint/no-explicit-any
-            leakedNames.add((prop as any).value.value); // eslint-disable-line @typescript-eslint/no-explicit-any
+            leakedNames.add((prop as any).value.value);
           }
         }
       }
@@ -73,15 +70,15 @@ export function applyFunctionTable(ast: SwcProgram, options: FunctionTableOption
   });
 
   // Collect top-level named function declarations first, then remove only if threshold is met
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const functions: { id: string; fn: any }[] = [];
   const nameToIndex = new Map<string, number>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const functionPaths: NodePath<any>[] = [];
 
   traverse(ast, {
     FunctionDeclaration(path) {
-      const node = path.node as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      const node = path.node as any;
       // SWC FunctionDeclaration uses .identifier (not .id)
       if (!node.identifier) return;
       if (!t.isProgram(path.parent) && !t.isBlockStatement(path.parent)) return;
@@ -94,7 +91,7 @@ export function applyFunctionTable(ast: SwcProgram, options: FunctionTableOption
 
   // Build the index map before touching the AST
   for (let i = 0; i < functionPaths.length; i++) {
-    nameToIndex.set((functionPaths[i].node as any).identifier.value, i); // eslint-disable-line @typescript-eslint/no-explicit-any
+    nameToIndex.set((functionPaths[i].node as any).identifier.value, i);
   }
 
   // Replace call sites FIRST (while function bodies are still in the AST)
@@ -102,7 +99,7 @@ export function applyFunctionTable(ast: SwcProgram, options: FunctionTableOption
   traverse(ast, {
     CallExpression(path) {
       if (!t.isIdentifier(path.node.callee)) return;
-      const idx = nameToIndex.get((path.node.callee as any).value); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const idx = nameToIndex.get((path.node.callee as any).value);
       if (idx === undefined) return;
 
       path.node.callee = t.memberExpression(
@@ -116,7 +113,7 @@ export function applyFunctionTable(ast: SwcProgram, options: FunctionTableOption
   // Now extract function expressions and remove declarations from the AST
   // Extract in original order first, then remove in reverse order to preserve indices
   for (const path of functionPaths) {
-    const node = path.node as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const node = path.node as any;
     functions.push({
       id: node.identifier.value,
       fn: t.functionExpression(
@@ -138,21 +135,21 @@ export function applyFunctionTable(ast: SwcProgram, options: FunctionTableOption
     t.variableDeclarator(t.identifier(tableId), t.arrayExpression(functions.map((f) => f.fn))),
   ]);
 
-  ast.body.unshift(tableDeclaration as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+  ast.body.unshift(tableDeclaration as any);
 }
 
 /**
  * Returns true if `node` is an assignment target that exposes a value as a
  * CJS export: `exports`, `module.exports`, or any member of `module.exports`.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function isExportsTarget(node: any): boolean {
   // bare `exports`
-  if (t.isIdentifier(node) && (node as any).value === "exports") return true; // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (t.isIdentifier(node) && (node as any).value === "exports") return true;
   // must be a MemberExpression and not computed
-  if (!t.isMemberExpression(node) || (node as any).property?.type === "Computed") return false; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const obj = (node as any).object; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const prop = (node as any).property; // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!t.isMemberExpression(node) || (node as any).property?.type === "Computed") return false;
+  const obj = (node as any).object;
+  const prop = (node as any).property;
   // `exports.foo`
   if (t.isIdentifier(obj) && obj.value === "exports") return true;
   // `module.exports`
@@ -166,11 +163,11 @@ function isExportsTarget(node: any): boolean {
   // `module.exports.foo`
   if (
     t.isMemberExpression(obj) &&
-    (obj as any).property?.type !== "Computed" && // eslint-disable-line @typescript-eslint/no-explicit-any
-    t.isIdentifier((obj as any).object) && // eslint-disable-line @typescript-eslint/no-explicit-any
-    (obj as any).object.value === "module" && // eslint-disable-line @typescript-eslint/no-explicit-any
-    t.isIdentifier((obj as any).property) && // eslint-disable-line @typescript-eslint/no-explicit-any
-    (obj as any).property.value === "exports" // eslint-disable-line @typescript-eslint/no-explicit-any
+    (obj as any).property?.type !== "Computed" &&
+    t.isIdentifier((obj as any).object) &&
+    (obj as any).object.value === "module" &&
+    t.isIdentifier((obj as any).property) &&
+    (obj as any).property.value === "exports"
   )
     return true;
   return false;

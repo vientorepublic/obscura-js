@@ -25,7 +25,7 @@ export const DUMMY_SPAN = { start: 0, end: 0, ctxt: 0 };
 // ─── SWC program type ────────────────────────────────────────────────────────
 
 /** The top-level SWC AST node (replaces Babel's t.File) */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 export type SwcProgram = {
   type: "Module" | "Script";
   body: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
