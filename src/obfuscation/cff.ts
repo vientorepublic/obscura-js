@@ -42,6 +42,16 @@ export function applyControlFlowFlattening(
     if (!t.isVariableDeclaration(stmt) || (stmt.kind !== "let" && stmt.kind !== "const")) {
       return t.cloneNode(stmt, true);
     }
+    // Destructuring patterns (ObjectPattern/ArrayPattern) cannot be hoisted
+    // as var without an initializer — they are invalid JS. Leave them unchanged.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hasPattern = stmt.declarations.some((d: any) => {
+      const idType = d.id?.type;
+      return (
+        idType === "ObjectPattern" || idType === "ArrayPattern" || idType === "AssignmentPattern"
+      );
+    });
+    if (hasPattern) return t.cloneNode(stmt, true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const assignments: any[] = [];
     for (const decl of stmt.declarations) {
@@ -69,6 +79,23 @@ export function applyControlFlowFlattening(
         // Skip trivial or already-flattened bodies
         if (body.length <= 1) return;
         if (body.some((s: any) => t.isSwitchStatement(s))) return; // eslint-disable-line @typescript-eslint/no-explicit-any
+        // Skip bodies containing destructuring patterns (let {a,b} = ...) —
+        // block-scoped bindings cannot be hoisted across switch cases.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (
+          body.some((s: any) => {
+            if (!t.isVariableDeclaration(s)) return false;
+            return s.declarations.some((d: any) => {
+              const idType = d.id?.type;
+              return (
+                idType === "ObjectPattern" ||
+                idType === "ArrayPattern" ||
+                idType === "AssignmentPattern"
+              );
+            });
+          })
+        )
+          return;
 
         // Fresh ID per function per pass — avoids collisions when passes>1
         const stateVar = genId();

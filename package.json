@@ -30,7 +30,7 @@
     "build": "tsc && node -e \"require('fs').chmodSync('dist/bin/obscura_cli.js', 0o755)\"",
     "build:watch": "tsc --watch",
     "prepublishOnly": "npm run build && npm test",
-    "test": "jest --coverage",
+    "test": "jest --coverage --runInBand",
     "lint": "eslint src/ bin/",
     "lint:fix": "eslint src/ bin/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"bin/**/*.ts\" \"tests/**/*.ts\"",
