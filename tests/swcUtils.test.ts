@@ -111,10 +111,11 @@ describe("t.* builders — SWC field names (Babel migration guard)", () => {
 // ─── SWC parser output — field structure verification ───────────────────────
 
 describe("SWC parser output — SWC-specific field names", () => {
-  it("parsed BlockStatement uses .stmts not .body", () => {
+  it("parsed function body uses .stmts not .body", () => {
     const ast = parse("function f() { return 1; }");
     const fnDecl = (ast as any).body[0];
-    expect(fnDecl.body.type).toBe("BlockStatement");
+    // SWC 1.16+ uses FunctionBody instead of BlockStatement for function bodies
+    expect(fnDecl.body.type).toBe("FunctionBody");
     expect(Array.isArray(fnDecl.body.stmts)).toBe(true);
     expect((fnDecl.body as any).body).toBeUndefined();
   });

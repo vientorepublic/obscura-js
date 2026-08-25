@@ -117,7 +117,7 @@ export function applyControlFlowFlattening(
           prelude.push(t.variableDeclaration("var", hoisted));
         }
 
-        path.node.body = t.blockStatement([...prelude, dispatcher]);
+        path.node.body = t.functionBody([...prelude, dispatcher]);
 
         path.skip();
       },
