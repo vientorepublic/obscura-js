@@ -1,6 +1,6 @@
 {
   "name": "obscura-js",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "JavaScript code protection tool — obfuscation & anti-debugging inspired by Google reCAPTCHA",
   "type": "commonjs",
   "main": "dist/src/index.js",
@@ -30,7 +30,7 @@
     "build": "tsc && node -e \"require('fs').chmodSync('dist/bin/obscura_cli.js', 0o755)\"",
     "build:watch": "tsc --watch",
     "prepublishOnly": "npm run build && npm test",
-    "test": "jest --coverage",
+    "test": "jest --coverage --runInBand",
     "lint": "eslint src/ bin/",
     "lint:fix": "eslint src/ bin/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"bin/**/*.ts\" \"tests/**/*.ts\"",
@@ -62,7 +62,7 @@
   },
   "dependencies": {
     "@swc/core": "^1.15.40",
-    "commander": "^12.0.0"
+    "commander": "^15.0.0"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

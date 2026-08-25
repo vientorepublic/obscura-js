@@ -115,6 +115,8 @@ export function applyIntegrityTag(ast: SwcProgram, options: IntegrityTagOptions 
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const elements = path.node.elements as any[];
+      // Skip arrays with spread elements — runtime length differs from AST length
+      if (elements.some((el: any) => el && el.spread)) return;
       const pure = isPureLiteralArray(elements);
       const checksum = pure
         ? contentChecksum(elements, K1, K2)

@@ -535,9 +535,9 @@ describe("integrityTag — sparse holes and spread elements", () => {
     expect((arr as any)[sym][1]).toBe(1);
   });
 
-  it("array with spread element [...x, 1] gets kind=0 (not pure literal)", () => {
-    // isPureLiteralArray returns false as soon as it sees el.spread is non-null.
-    // The array falls back to length-based checksum (kind=0).
+  it("array with spread element [...x, 1] is NOT tagged (runtime length differs)", () => {
+    // Spread elements produce runtime arrays whose length differs from the
+    // AST-level length, so integrityTag skips them to avoid false corruption.
     const source = "var x = [9]; const a = [...x, 1]; globalThis.__a = a;";
     const code = parseAndApply(source, (ast) => applyIntegrityTag(ast));
     const ctx: Record<string, unknown> = { globalThis: {} };
@@ -546,9 +546,9 @@ describe("integrityTag — sparse holes and spread elements", () => {
     const arr = (ctx["globalThis"] as Record<string, unknown>)["__a"] as unknown[];
     expect(arr[0]).toBe(9);
     expect(arr[1]).toBe(1);
-    // kind=0 (length-based) because of spread
-    const sym = Object.getOwnPropertySymbols(arr)[0];
-    expect((arr as any)[sym][1]).toBe(0);
+    // No Symbol tag — spread array is left untagged
+    const syms = Object.getOwnPropertySymbols(arr);
+    expect(syms.length).toBe(0);
   });
 
   it("pure string literal array ['a','b'] gets kind=1 (content-based checksum)", () => {

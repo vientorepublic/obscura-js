@@ -430,6 +430,14 @@ export const t = {
     return { type: "BlockStatement", span: DUMMY_SPAN, ctxt: 0, stmts };
   },
 
+  /**
+   * Create a FunctionBody node (used for function/arrow body in SWC 1.16+).
+   * In SWC 1.16+, function bodies use "FunctionBody" instead of "BlockStatement".
+   */
+  functionBody(stmts: AnyNode[]): AnyNode {
+    return { type: "FunctionBody", span: DUMMY_SPAN, stmts };
+  },
+
   returnStatement(argument: AnyNode = null): AnyNode {
     return { type: "ReturnStatement", span: DUMMY_SPAN, argument };
   },
@@ -455,7 +463,7 @@ export const t = {
   },
 
   switchStatement(discriminant: AnyNode, cases: AnyNode[]): AnyNode {
-    return { type: "SwitchStatement", span: DUMMY_SPAN, discriminant, cases };
+    return { type: "SwitchStatement", span: DUMMY_SPAN, bodyCtxt: 0, discriminant, cases };
   },
 
   switchCase(test: AnyNode, consequent: AnyNode[]): AnyNode {
@@ -515,7 +523,7 @@ export const t = {
   // ── Type guards ──────────────────────────────────────────────────────────
 
   isBlockStatement(node: AnyNode): boolean {
-    return node?.type === "BlockStatement";
+    return node?.type === "BlockStatement" || node?.type === "FunctionBody";
   },
 
   isExpressionStatement(node: AnyNode): boolean {
