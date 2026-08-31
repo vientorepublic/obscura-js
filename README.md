@@ -10,6 +10,10 @@ A JavaScript code protection library inspired by the obfuscation and anti-debugg
 [![npm version](https://img.shields.io/npm/v/obscura-js)](https://www.npmjs.com/package/obscura-js)
 [![license](https://img.shields.io/npm/l/obscura-js)](LICENSE)
 [![node](https://img.shields.io/node/v/obscura-js)](package.json)
+[![Coverage:statements](.badges/badge-statements.svg)](coverage/lcov-report/index.html)
+[![Coverage:lines](.badges/badge-lines.svg)](coverage/lcov-report/index.html)
+[![Coverage:functions](.badges/badge-functions.svg)](coverage/lcov-report/index.html)
+[![Coverage:branches](.badges/badge-branches.svg)](coverage/lcov-report/index.html)
 
 ## Features
 
