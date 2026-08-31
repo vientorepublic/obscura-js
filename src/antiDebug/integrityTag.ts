@@ -2,6 +2,7 @@ import { traverse, t } from "../swc-utils";
 import { parseSync } from "@swc/core";
 import type { SwcProgram } from "../swc-utils";
 import type { IntegrityTagOptions } from "../types";
+import type { ExprOrSpread } from "@swc/types";
 import { genId } from "../genId";
 
 /**
@@ -113,10 +114,9 @@ export function applyIntegrityTag(ast: SwcProgram, options: IntegrityTagOptions 
     ArrayExpression(path) {
       if (isInsideTagFn(path.parent)) return;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const elements = path.node.elements as any[];
+      const elements = path.node.elements as (ExprOrSpread | undefined)[];
       // Skip arrays with spread elements — runtime length differs from AST length
-      if (elements.some((el: any) => el && el.spread)) return;
+      if (elements.some((el: ExprOrSpread | undefined) => el && el.spread)) return;
       const pure = isPureLiteralArray(elements);
       const checksum = pure
         ? contentChecksum(elements, K1, K2)

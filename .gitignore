@@ -6,6 +6,7 @@ dist/
 
 # Test coverage
 coverage/
+!.badges/
 
 # TypeScript incremental build cache
 *.tsbuildinfo

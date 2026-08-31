@@ -1,6 +1,6 @@
 {
   "name": "obscura-js",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "JavaScript code protection tool — obfuscation & anti-debugging inspired by Google reCAPTCHA",
   "type": "commonjs",
   "main": "dist/src/index.js",
@@ -31,6 +31,7 @@
     "build:watch": "tsc --watch",
     "prepublishOnly": "npm run build && npm test",
     "test": "jest --coverage --runInBand",
+    "coverage:badge": "jest-coverage-badges && mkdir -p .badges && cp coverage/badge-*.svg .badges/",
     "lint": "eslint src/ bin/",
     "lint:fix": "eslint src/ bin/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"bin/**/*.ts\" \"tests/**/*.ts\"",
@@ -72,6 +73,7 @@
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "jest": "^30.0.0",
+    "jest-coverage-badges": "^1.1.2",
     "prettier": "^3.8.3",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",

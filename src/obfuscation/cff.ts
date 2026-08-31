@@ -1,6 +1,7 @@
 import { traverse, t } from "../swc-utils";
 import type { SwcProgram } from "../swc-utils";
 import type { ControlFlowFlatteningOptions } from "../types";
+import type { Statement, VariableDeclaration, VariableDeclarator } from "@swc/types";
 import { genId } from "../genId";
 
 /**
@@ -81,11 +82,11 @@ export function applyControlFlowFlattening(
         if (body.some((s: any) => t.isSwitchStatement(s))) return; // eslint-disable-line @typescript-eslint/no-explicit-any
         // Skip bodies containing destructuring patterns (let {a,b} = ...) —
         // block-scoped bindings cannot be hoisted across switch cases.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         if (
-          body.some((s: any) => {
+          body.some((s: Statement) => {
             if (!t.isVariableDeclaration(s)) return false;
-            return s.declarations.some((d: any) => {
+            return (s as VariableDeclaration).declarations.some((d: VariableDeclarator) => {
               const idType = d.id?.type;
               return (
                 idType === "ObjectPattern" ||
